@@ -494,17 +494,49 @@
         ctx.beginPath(); ctx.arc(sx2, sy2, r, 0, 6.283); ctx.fill();
       }
     }
-    // moving surface highlights
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.lineWidth = 1;
-    for (let k = 0; k < 3; k++) {
-      const yy = oyp + cell * (0.25 + 0.25 * k) + Math.sin(t * 0.002 + k) * 1.5;
+    // rolling swell lines so the sea is never still
+    ctx.lineWidth = 1.5;
+    for (let k = 0; k < 4; k++) {
+      const yy = oyp + cell * (0.2 + 0.2 * k) + Math.sin(now * 1.4 + k * 1.7) * cell * 0.06;
+      ctx.strokeStyle = `rgba(255,255,255,${(0.22 + 0.12 * (k % 2)).toFixed(2)})`;
       ctx.beginPath();
-      for (let x = 0; x <= COLS * cell; x += 4) {
-        const y2 = yy + Math.sin(x * 0.08 + t * 0.003 + k * 2) * 1.2;
+      for (let x = 0; x <= COLS * cell; x += 3) {
+        const y2 = yy + Math.sin(x * 0.07 + now * (1.8 + 0.5 * k) + k * 2) * cell * 0.12
+          + Math.sin(x * 0.021 - now * 1.1 + k) * cell * 0.08;
         if (x === 0) ctx.moveTo(x, y2); else ctx.lineTo(x, y2);
       }
       ctx.stroke();
+    }
+    // lapping wash: between surges the sea keeps sliding up into the wet zone and soaking away
+    if (!sim.waveActive) {
+      const cycle = 3.4;
+      const ph = (now % cycle) / cycle;                 // 0..1
+      const rise = 0.5 - 0.5 * Math.cos(ph * 6.283);    // 0 -> 1 -> 0
+      const soak = ph < 0.5 ? 1 : 1 - (ph - 0.5) * 2;   // fades while receding
+      const reach = cell * 1.7 * rise;
+      if (reach > 1) {
+        const edgeY = cx => oyp - reach * (0.8 + 0.2 * Math.sin(cx * 0.9 + now * 0.7)) + Math.sin(cx * 1.9 + now * 5) * cell * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(0, oyp + cell * 0.5);
+        for (let x = 0; x <= COLS; x++) ctx.lineTo(x * cell, edgeY(x));
+        ctx.lineTo(COLS * cell, oyp + cell * 0.5);
+        ctx.closePath();
+        const wg = ctx.createLinearGradient(0, oyp - reach, 0, oyp + cell * 0.5);
+        wg.addColorStop(0, `rgba(235,246,255,${(0.55 * soak).toFixed(3)})`);
+        wg.addColorStop(0.35, `rgba(120,185,235,${(0.35 * soak).toFixed(3)})`);
+        wg.addColorStop(1, 'rgba(60,140,210,0.1)');
+        ctx.fillStyle = wg;
+        ctx.fill();
+        // foam line along the wash's leading edge
+        ctx.strokeStyle = `rgba(255,255,255,${(0.7 * soak).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, cell * 0.12);
+        ctx.beginPath();
+        for (let x = 0; x <= COLS * cell; x += 3) {
+          const yy = edgeY(x / cell);
+          if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+      }
     }
     // ripples announcing the next wave
     if (G.phase === 'build') {
