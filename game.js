@@ -62,9 +62,20 @@
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) G.sim.setRock(x, y);
     });
     G.structs = L.structs.map(s => Object.assign({}, s));
+    // The castle starts built and packed wet, with a little headroom above the
+    // required height so the first nick of erosion does not fail it.
+    G.structs.forEach(s => {
+      for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
+        if (!G.sim.inBounds(x, y)) continue;
+        const i = G.sim.idx(x, y);
+        if (G.sim.rock[i]) continue;
+        G.sim.h[i] = Math.min(G.sim.maxH, s.req + 0.4);
+        G.sim.m[i] = 1;
+      }
+    });
     G.waveIndex = 0;
     G.timer = L.prep;
-    G.bucket = { sand: 0, moist: 0 };
+    G.bucket = { sand: 4, moist: 1 };   // a starting bucket of wet sand for quick repairs
     G.mode = 'dig';
     G.phase = 'intro';
     G.message = '';
@@ -292,6 +303,122 @@
     let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(k | 0, 1274126177) | 0;
     n = Math.imul(n ^ (n >>> 13), 1274126177);
     return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // ---------- castle art ----------
+  const INK = 'rgba(70,45,15,0.75)';
+  function merlon(x, y, w, h) {
+    ctx.fillStyle = 'rgba(255,248,225,0.6)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  }
+  function flag(fx, fy) {
+    ctx.strokeStyle = '#3b2a15'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy + cell * 0.9); ctx.stroke();
+    ctx.fillStyle = '#e5484d';
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + cell * 0.55, fy + cell * 0.22); ctx.lineTo(fx, fy + cell * 0.44); ctx.closePath(); ctx.fill();
+  }
+  function drawTower(px, py, pw, ph) {
+    const cx = px + pw / 2, cy = py + ph / 2, r = Math.min(pw, ph) / 2 - 1;
+    ctx.fillStyle = 'rgba(255,240,205,0.35)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = 'rgba(70,45,15,0.28)';
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.56, 0, 6.283); ctx.fill();
+    const n = 10, mw = Math.max(3, r * 0.34);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.283;
+      merlon(cx + Math.cos(a) * r * 0.78 - mw / 2, cy + Math.sin(a) * r * 0.78 - mw / 2, mw, mw);
+    }
+    flag(cx, cy - cell * 0.55);
+  }
+  function drawKeep(px, py, pw, ph) {
+    ctx.fillStyle = 'rgba(255,240,205,0.3)';
+    ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
+    const inset = cell * 0.45;
+    ctx.fillStyle = 'rgba(70,45,15,0.22)';
+    ctx.fillRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset);
+    const mw = cell * 0.3, step = cell * 0.5;
+    for (let x = px + 2; x <= px + pw - mw - 2; x += step) { merlon(x, py + 2, mw, mw); merlon(x, py + ph - mw - 2, mw, mw); }
+    for (let y = py + 2 + step; y <= py + ph - mw - 2 - step; y += step) { merlon(px + 2, y, mw, mw); merlon(px + pw - mw - 2, y, mw, mw); }
+    // gate on the seaward face
+    const gw = cell * 0.5, gh = cell * 0.55, gx = px + pw / 2, gy = py + ph - 2;
+    ctx.fillStyle = 'rgba(40,25,10,0.85)';
+    ctx.beginPath();
+    ctx.moveTo(gx - gw / 2, gy);
+    ctx.lineTo(gx - gw / 2, gy - gh + gw / 2);
+    ctx.arc(gx, gy - gh + gw / 2, gw / 2, Math.PI, 0);
+    ctx.lineTo(gx + gw / 2, gy);
+    ctx.closePath(); ctx.fill();
+    flag(gx, py + ph / 2 - cell * 0.55);
+  }
+  function drawWall(px, py, pw, ph, horizontal) {
+    ctx.fillStyle = 'rgba(255,240,205,0.3)';
+    ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
+    const mw = cell * 0.3, step = cell * 0.5;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(70,45,15,0.35)'; ctx.lineWidth = 1;
+    if (horizontal) {
+      for (let x = px + 2; x <= px + pw - mw - 2; x += step) merlon(x, py + 2, mw, mw);
+      ctx.strokeStyle = 'rgba(70,45,15,0.35)';
+      ctx.beginPath(); ctx.moveTo(px + 2, py + ph * 0.66); ctx.lineTo(px + pw - 2, py + ph * 0.66); ctx.stroke();
+    } else {
+      for (let y = py + 2; y <= py + ph - mw - 2; y += step) merlon(px + 2, y, mw, mw);
+      ctx.strokeStyle = 'rgba(70,45,15,0.35)';
+      ctx.beginPath(); ctx.moveTo(px + pw * 0.66, py + 2); ctx.lineTo(px + pw * 0.66, py + ph - 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawStructure(s) {
+    const sim = G.sim;
+    const px = s.x * cell, py = s.y * cell, pw = s.w * cell, ph = s.h * cell;
+    const healthy = [];
+    let all = true, any = false;
+    for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
+      const ok = sim.inBounds(x, y) && sim.h[sim.idx(x, y)] >= s.req - 0.5;
+      healthy.push(ok); if (ok) any = true; else all = false;
+    }
+    // rubble where the sea broke through
+    let k = 0;
+    for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++, k++) {
+      if (healthy[k]) continue;
+      ctx.fillStyle = 'rgba(70,45,15,0.35)';
+      for (let j = 0; j < 5; j++) {
+        const rx = x * cell + (0.1 + 0.75 * hash(x, y, j)) * cell;
+        const ry = y * cell + (0.1 + 0.75 * hash(y, x, j + 9)) * cell;
+        const r = cell * (0.05 + 0.08 * hash(x + j, y, 4));
+        ctx.fillRect(rx, ry, r * 2, r * 1.4);
+      }
+    }
+    // castle art only over cells still holding their height
+    if (any) {
+      ctx.save();
+      ctx.beginPath();
+      k = 0;
+      for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++, k++) if (healthy[k]) ctx.rect(x * cell, y * cell, cell, cell);
+      ctx.clip();
+      if (s.type === 'tower') drawTower(px, py, pw, ph);
+      else if (s.type === 'keep') drawKeep(px, py, pw, ph);
+      else drawWall(px, py, pw, ph, s.w >= s.h);
+      ctx.restore();
+    }
+    // breach outline with the height to rebuild to
+    if (!all) {
+      ctx.strokeStyle = 'rgba(240,180,41,0.95)';
+      ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+      ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+      ctx.setLineDash([]);
+      const bw = Math.max(12, cell * 0.7);
+      ctx.fillStyle = 'rgba(240,180,41,0.95)';
+      ctx.fillRect(px + pw - bw - 2, py + 2, bw, bw);
+      ctx.fillStyle = '#0b1b2b';
+      ctx.fillText(String(s.req), px + pw - bw / 2 - 2, py + 3);
+    }
   }
 
   // Phones resize the viewport when the address bar shows or hides, and the
@@ -570,38 +697,12 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // blueprints
-    ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.62))}px system-ui, sans-serif`;
+    // castle: art is drawn over cells that still hold their height; breached
+    // cells show rubble and an amber outline with the height to rebuild to
+    ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.6))}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
-    G.structs.forEach(s => {
-      const st = sim.standing(s);
-      const col = st.standing ? '46,184,114' : st.ok > 0 ? '240,180,41' : '226,84,84';
-      const px = s.x * cell, py = s.y * cell, pw = s.w * cell, ph = s.h * cell;
-      ctx.fillStyle = `rgba(${col},0.14)`;
-      ctx.fillRect(px, py, pw, ph);
-      ctx.strokeStyle = `rgba(${col},0.95)`;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 3]);
-      ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
-      ctx.setLineDash([]);
-      // required height badge
-      const label = `${s.req}`;
-      const bw = Math.max(12, cell * 0.7), bh = Math.max(12, cell * 0.7);
-      ctx.fillStyle = `rgba(${col},0.95)`;
-      ctx.fillRect(px + pw - bw - 2, py + 2, bw, bh);
-      ctx.fillStyle = '#0b1b2b';
-      ctx.textAlign = 'center';
-      ctx.fillText(label, px + pw - bw / 2 - 2, py + 3);
-      // flag on standing towers
-      if (st.standing && s.req >= 3) {
-        const fx = px + pw / 2, fy = py - cell * 0.15;
-        ctx.strokeStyle = '#3b2a15';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy + cell * 0.9); ctx.stroke();
-        ctx.fillStyle = '#e5484d';
-        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + cell * 0.55, fy + cell * 0.22); ctx.lineTo(fx, fy + cell * 0.44); ctx.closePath(); ctx.fill();
-      }
-    });
+    ctx.textAlign = 'center';
+    G.structs.forEach(s => drawStructure(s));
 
     // cursor cell
     if (ptr.down && sim.inBounds(ptr.cx, ptr.cy) && ptr.cy < ROWS - 1) {

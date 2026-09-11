@@ -2,7 +2,7 @@
 
 A one-thumb mobile puzzle game about building sandcastles against a rising tide.
 
-Every level is a beach that floods on a timer. Dig wet sand from near the water, pile it onto the blueprint outlines, and keep every structure standing through a set number of waves. Wet sand holds its shape; dry sand crumbles and washes away. Moats swallow the surge before it hits your walls, as long as you leave a gap so they don't undermine them.
+Every level is a beach that floods on a timer. Your castle starts built. Dig moats, raise outer walls, and patch the damage between waves to keep every tower, keep, and wall standing through a set number of waves. Wet sand holds its shape; dry sand crumbles and washes away. Moats swallow the surge before it hits your walls, as long as you leave a gap so they don't undermine them.
 
 **Play it:** open `Tidewright.html` in any browser. It is a single self-contained file. On a phone it plays in portrait with one thumb.
 
@@ -13,7 +13,7 @@ Every level is a beach that floods on a timer. Dig wet sand from near the water,
 - **Wave**: call the next wave early instead of waiting out the timer.
 - Keyboard: `D` dig, `B` build, `Space` call the wave.
 
-Structures are checked when each wave arrives and again after the last one settles. Build to at least the number on each outline, and overbuild for a buffer.
+Structures are checked when each wave arrives and again after the last one settles. A breached piece shows an amber outline with the height to rebuild it to. Overbuild for a buffer.
 
 ## Project layout
 
