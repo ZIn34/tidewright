@@ -1,0 +1,174 @@
+<title>Tidewright</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  :root {
+    --bg: #0b1b2b;
+    --panel: #12283d;
+    --panel-2: #1a3550;
+    --ink: #eef4f8;
+    --ink-dim: #9fb3c5;
+    --sand: #e9d7a8;
+    --sea: #2b7fc9;
+    --ok: #2eb872;
+    --warn: #f0b429;
+    --bad: #e25454;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.4 "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    max-width: 520px; margin: 0 auto;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    flex: 0 0 auto;
+    padding: 8px 12px 6px;
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
+  }
+  header .title { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.01em; }
+  header .wave { color: var(--ink-dim); font-size: 13px; }
+  header .timer { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  header .status { text-align: right; font-size: 13px; }
+  header .status.ok { color: var(--ok); }
+  header .status.bad { color: var(--warn); }
+  .track { grid-column: 1 / -1; height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar { height: 100%; width: 0; background: var(--sea); transition: width 0.15s linear; }
+  .bar.urgent { background: var(--warn); }
+  .bar.surge { background: #7cc4ff; }
+  #beach {
+    flex: 1 1 auto; width: 100%; min-height: 0;
+    touch-action: none; display: block;
+  }
+  footer {
+    flex: 0 0 auto;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+    padding: 8px 12px 10px;
+  }
+  .modes { display: flex; background: var(--panel); border-radius: 12px; padding: 3px; }
+  .modes button {
+    border: 0; background: transparent; color: var(--ink-dim);
+    padding: 12px 16px; border-radius: 10px; font: inherit; font-weight: 700; font-size: 15px;
+    cursor: pointer;
+  }
+  .modes button.active { background: var(--sand); color: #2b1d08; }
+  .bucket { display: flex; align-items: center; gap: 8px; justify-self: center; }
+  .bucket .cup {
+    width: 26px; height: 40px; border: 2px solid var(--ink-dim); border-top-width: 3px; border-radius: 3px 3px 8px 8px;
+    position: relative; overflow: hidden; background: var(--panel);
+  }
+  .bucket .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--sand); transition: height 0.1s; }
+  .bucket .num { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  .bucket .lbl { color: var(--ink-dim); font-size: 12px; display: block; }
+  .actions { display: flex; gap: 6px; }
+  .actions button, .overlay button, .lvl {
+    border: 0; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer;
+    background: var(--panel-2); color: var(--ink); padding: 12px 14px;
+  }
+  .actions button:disabled { opacity: 0.4; cursor: default; }
+  #btn-call { background: var(--sea); }
+  #btn-restart, #btn-menu { padding: 12px; }
+  #overlays { position: fixed; inset: 0; background: rgba(5,14,24,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 5; }
+  .overlay { background: var(--panel); border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .overlay h1 { margin: 0 0 4px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 34px; letter-spacing: -0.01em; text-wrap: balance; }
+  .overlay h2 { margin: 0 0 8px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 24px; text-wrap: balance; }
+  .overlay p { margin: 0 0 12px; color: var(--ink); }
+  .overlay .hint { color: var(--ink-dim); font-style: italic; }
+  .overlay .meta { color: var(--ink-dim); font-size: 13px; margin-bottom: 14px; }
+  .overlay .row { display: flex; gap: 8px; margin-top: 8px; }
+  .overlay .row button { flex: 1; }
+  .overlay .primary { background: var(--sea); }
+  .overlay .quiet { background: transparent; color: var(--ink-dim); }
+  #level-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 14px 0 6px; }
+  .lvl { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; }
+  .lvl .num { width: 26px; height: 26px; border-radius: 50%; background: var(--sand); color: #2b1d08; display: grid; place-items: center; font-size: 13px; flex: 0 0 auto; }
+  .lvl.done .num { background: var(--ok); color: #05261a; }
+  .lvl.locked { opacity: 0.35; cursor: default; }
+  .lvl .nm { font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .bar, .bucket .fill { transition: none; } }
+  button:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+  .legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; color: var(--ink-dim); margin: 10px 0 4px; align-items: center; }
+  .legend .sw { width: 22px; height: 14px; border-radius: 3px; }
+  .lg-wet { background: #a68658; }
+  .lg-dry { background: #ecd8a8; }
+  .lg-bp { border: 2px dashed var(--warn); box-sizing: border-box; background: rgba(240,180,41,0.15); }
+</style>
+
+<div id="app">
+  <header>
+    <div class="title" id="hud-level">Tidewright</div>
+    <div class="timer" id="hud-timer"></div>
+    <div class="wave" id="hud-wave"></div>
+    <div class="status" id="hud-status"></div>
+    <div class="track"><div class="bar" id="hud-bar"></div></div>
+  </header>
+  <canvas id="beach"></canvas>
+  <footer>
+    <div class="modes">
+      <button id="btn-dig" class="active" aria-label="Dig mode">Dig</button>
+      <button id="btn-build" aria-label="Build mode">Build</button>
+    </div>
+    <div class="bucket" title="Sand in your bucket">
+      <div class="cup"><div class="fill" id="bucket-fill"></div></div>
+      <div><span class="num" id="bucket-num">0</span><span class="lbl">bucket</span></div>
+    </div>
+    <div class="actions">
+      <button id="btn-call" title="Bring the next wave now">Wave</button>
+      <button id="btn-restart" title="Restart level" aria-label="Restart">&#8635;</button>
+      <button id="btn-menu" title="Level select" aria-label="Menu">&#9776;</button>
+    </div>
+  </footer>
+</div>
+
+<div id="overlays">
+  <div class="overlay" data-name="menu">
+    <h1>Tidewright</h1>
+    <p class="meta">Build sandcastles against a rising tide. Dig wet sand, pile it on the outlines, hold through every wave.</p>
+    <div class="legend">
+      <div class="sw lg-wet"></div><div>Wet sand holds its shape</div>
+      <div class="sw lg-dry"></div><div>Dry sand crumbles and washes away</div>
+      <div class="sw lg-bp"></div><div>Blueprint: build to the number shown</div>
+    </div>
+    <div id="level-grid"></div>
+    <div class="row"><button id="btn-reset" class="quiet">Reset progress</button></div>
+  </div>
+  <div class="overlay" data-name="intro" hidden>
+    <h2 id="intro-title"></h2>
+    <p id="intro-desc"></p>
+    <p class="hint" id="intro-hint"></p>
+    <p class="meta" id="intro-waves"></p>
+    <div class="row"><button id="btn-go" class="primary">Start building</button></div>
+  </div>
+  <div class="overlay" data-name="lost" hidden>
+    <h2>Washed out</h2>
+    <p id="lost-msg"></p>
+    <div class="row">
+      <button id="btn-lost-menu" class="quiet">Levels</button>
+      <button id="btn-retry" class="primary">Try again</button>
+    </div>
+  </div>
+  <div class="overlay" data-name="won" hidden>
+    <h2>It held</h2>
+    <p id="won-msg"></p>
+    <div class="row">
+      <button id="btn-won-menu" class="quiet">Levels</button>
+      <button id="btn-next" class="primary">Next beach</button>
+    </div>
+  </div>
+</div>
+
+<script src="sim.js"></script>
+<script src="levels.js"></script>
+<script src="game.js"></script>

@@ -1,0 +1,1184 @@
+<title>Tidewright</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  :root {
+    --bg: #0b1b2b;
+    --panel: #12283d;
+    --panel-2: #1a3550;
+    --ink: #eef4f8;
+    --ink-dim: #9fb3c5;
+    --sand: #e9d7a8;
+    --sea: #2b7fc9;
+    --ok: #2eb872;
+    --warn: #f0b429;
+    --bad: #e25454;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.4 "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    max-width: 520px; margin: 0 auto;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    flex: 0 0 auto;
+    padding: 8px 12px 6px;
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
+  }
+  header .title { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.01em; }
+  header .wave { color: var(--ink-dim); font-size: 13px; }
+  header .timer { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  header .status { text-align: right; font-size: 13px; }
+  header .status.ok { color: var(--ok); }
+  header .status.bad { color: var(--warn); }
+  .track { grid-column: 1 / -1; height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar { height: 100%; width: 0; background: var(--sea); transition: width 0.15s linear; }
+  .bar.urgent { background: var(--warn); }
+  .bar.surge { background: #7cc4ff; }
+  #beach {
+    flex: 1 1 auto; width: 100%; min-height: 0;
+    touch-action: none; display: block;
+  }
+  footer {
+    flex: 0 0 auto;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+    padding: 8px 12px 10px;
+  }
+  .modes { display: flex; background: var(--panel); border-radius: 12px; padding: 3px; }
+  .modes button {
+    border: 0; background: transparent; color: var(--ink-dim);
+    padding: 12px 16px; border-radius: 10px; font: inherit; font-weight: 700; font-size: 15px;
+    cursor: pointer;
+  }
+  .modes button.active { background: var(--sand); color: #2b1d08; }
+  .bucket { display: flex; align-items: center; gap: 8px; justify-self: center; }
+  .bucket .cup {
+    width: 26px; height: 40px; border: 2px solid var(--ink-dim); border-top-width: 3px; border-radius: 3px 3px 8px 8px;
+    position: relative; overflow: hidden; background: var(--panel);
+  }
+  .bucket .fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--sand); transition: height 0.1s; }
+  .bucket .num { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  .bucket .lbl { color: var(--ink-dim); font-size: 12px; display: block; }
+  .actions { display: flex; gap: 6px; }
+  .actions button, .overlay button, .lvl {
+    border: 0; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer;
+    background: var(--panel-2); color: var(--ink); padding: 12px 14px;
+  }
+  .actions button:disabled { opacity: 0.4; cursor: default; }
+  #btn-call { background: var(--sea); }
+  #btn-restart, #btn-menu { padding: 12px; }
+  #overlays { position: fixed; inset: 0; background: rgba(5,14,24,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 5; }
+  .overlay { background: var(--panel); border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .overlay h1 { margin: 0 0 4px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 34px; letter-spacing: -0.01em; text-wrap: balance; }
+  .overlay h2 { margin: 0 0 8px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-weight: 800; font-size: 24px; text-wrap: balance; }
+  .overlay p { margin: 0 0 12px; color: var(--ink); }
+  .overlay .hint { color: var(--ink-dim); font-style: italic; }
+  .overlay .meta { color: var(--ink-dim); font-size: 13px; margin-bottom: 14px; }
+  .overlay .row { display: flex; gap: 8px; margin-top: 8px; }
+  .overlay .row button { flex: 1; }
+  .overlay .primary { background: var(--sea); }
+  .overlay .quiet { background: transparent; color: var(--ink-dim); }
+  #level-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 14px 0 6px; }
+  .lvl { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; }
+  .lvl .num { width: 26px; height: 26px; border-radius: 50%; background: var(--sand); color: #2b1d08; display: grid; place-items: center; font-size: 13px; flex: 0 0 auto; }
+  .lvl.done .num { background: var(--ok); color: #05261a; }
+  .lvl.locked { opacity: 0.35; cursor: default; }
+  .lvl .nm { font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .bar, .bucket .fill { transition: none; } }
+  button:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+  .legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; color: var(--ink-dim); margin: 10px 0 4px; align-items: center; }
+  .legend .sw { width: 22px; height: 14px; border-radius: 3px; }
+  .lg-wet { background: #a68658; }
+  .lg-dry { background: #ecd8a8; }
+  .lg-bp { border: 2px dashed var(--warn); box-sizing: border-box; background: rgba(240,180,41,0.15); }
+</style>
+
+<div id="app">
+  <header>
+    <div class="title" id="hud-level">Tidewright</div>
+    <div class="timer" id="hud-timer"></div>
+    <div class="wave" id="hud-wave"></div>
+    <div class="status" id="hud-status"></div>
+    <div class="track"><div class="bar" id="hud-bar"></div></div>
+  </header>
+  <canvas id="beach"></canvas>
+  <footer>
+    <div class="modes">
+      <button id="btn-dig" class="active" aria-label="Dig mode">Dig</button>
+      <button id="btn-build" aria-label="Build mode">Build</button>
+    </div>
+    <div class="bucket" title="Sand in your bucket">
+      <div class="cup"><div class="fill" id="bucket-fill"></div></div>
+      <div><span class="num" id="bucket-num">0</span><span class="lbl">bucket</span></div>
+    </div>
+    <div class="actions">
+      <button id="btn-call" title="Bring the next wave now">Wave</button>
+      <button id="btn-restart" title="Restart level" aria-label="Restart">&#8635;</button>
+      <button id="btn-menu" title="Level select" aria-label="Menu">&#9776;</button>
+    </div>
+  </footer>
+</div>
+
+<div id="overlays">
+  <div class="overlay" data-name="menu">
+    <h1>Tidewright</h1>
+    <p class="meta">Build sandcastles against a rising tide. Dig wet sand, pile it on the outlines, hold through every wave.</p>
+    <div class="legend">
+      <div class="sw lg-wet"></div><div>Wet sand holds its shape</div>
+      <div class="sw lg-dry"></div><div>Dry sand crumbles and washes away</div>
+      <div class="sw lg-bp"></div><div>Blueprint: build to the number shown</div>
+    </div>
+    <div id="level-grid"></div>
+    <div class="row"><button id="btn-reset" class="quiet">Reset progress</button></div>
+  </div>
+  <div class="overlay" data-name="intro" hidden>
+    <h2 id="intro-title"></h2>
+    <p id="intro-desc"></p>
+    <p class="hint" id="intro-hint"></p>
+    <p class="meta" id="intro-waves"></p>
+    <div class="row"><button id="btn-go" class="primary">Start building</button></div>
+  </div>
+  <div class="overlay" data-name="lost" hidden>
+    <h2>Washed out</h2>
+    <p id="lost-msg"></p>
+    <div class="row">
+      <button id="btn-lost-menu" class="quiet">Levels</button>
+      <button id="btn-retry" class="primary">Try again</button>
+    </div>
+  </div>
+  <div class="overlay" data-name="won" hidden>
+    <h2>It held</h2>
+    <p id="won-msg"></p>
+    <div class="row">
+      <button id="btn-won-menu" class="quiet">Levels</button>
+      <button id="btn-next" class="primary">Next beach</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Tidewright - beach simulation core (no DOM). Works in browser and node.
+(function (root) {
+  'use strict';
+
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  // Small deterministic PRNG so waves are reproducible per level attempt.
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  class Sim {
+    constructor(cols, rows, opts) {
+      opts = opts || {};
+      this.cols = cols;
+      this.rows = rows;
+      const n = cols * rows;
+      this.h = new Float32Array(n);     // sand height above base ground (can be negative = dug)
+      this.m = new Float32Array(n);     // moisture 0..1
+      this.w = new Float32Array(n);     // standing water depth
+      this.g = new Float32Array(n);     // base ground (beach slope)
+      this.rock = new Uint8Array(n);
+      this.flow = new Float32Array(n);  // water flow magnitude during last step
+      this.dw = new Float32Array(n);
+      this.slope = opts.slope != null ? opts.slope : 1.3;
+      this.wetRows = opts.wetRows != null ? opts.wetRows : 3;
+      this.dryRate = opts.dryRate != null ? opts.dryRate : 0.01;
+      this.flowRate = opts.flowRate != null ? opts.flowRate : 14;
+      this.eroRate = opts.eroRate != null ? opts.eroRate : 0.35;
+      this.eroThr = opts.eroThr != null ? opts.eroThr : 0.35;
+      this.pressRate = opts.pressRate != null ? opts.pressRate : 0.12;
+      this.maxH = 4;
+      this.minH = -2;
+      this.rand = mulberry32(opts.seed || 1);
+      this.time = 0;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          const up = (rows - 1 - y) / (rows - 1); // 0 at ocean row, 1 at top
+          this.g[i] = this.slope * up;
+          // moisture gradient: wet near the water, dry up the beach
+          const distFromWet = y - (rows - 1 - this.wetRows);
+          if (distFromWet >= 0) this.m[i] = 1;
+          else this.m[i] = Math.max(0.12, 0.9 + distFromWet * 0.08);
+          if (opts.allWet) this.m[i] = 1;
+        }
+      }
+      // ocean row is a basin
+      for (let x = 0; x < cols; x++) this.g[(rows - 1) * cols + x] = -0.6;
+
+      this.waveActive = false;
+      this.waveT = 0;
+      this.waveSpec = null;
+      this.waveNoise = new Float32Array(cols);
+    }
+
+    idx(x, y) { return y * this.cols + x; }
+    inBounds(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
+    isOcean(y) { return y === this.rows - 1; }
+    surface(i) { return this.g[i] + this.h[i] + this.w[i]; }
+
+    setRock(x, y) {
+      const i = this.idx(x, y);
+      this.rock[i] = 1;
+      this.h[i] = 6;
+      this.m[i] = 0;
+    }
+
+    startWave(spec) {
+      this.waveActive = true;
+      this.waveT = 0;
+      this.waveSpec = spec;
+      for (let x = 0; x < this.cols; x++) this.waveNoise[x] = 0.85 + this.rand() * 0.3;
+    }
+
+    // Wave injection profile for a column, 0..1 factor
+    waveFactor(x) {
+      const s = this.waveSpec;
+      let f = this.waveNoise[x];
+      if (s.focus != null) {
+        const width = s.width || 5;
+        const d = (x - s.focus) / width;
+        f *= 0.15 + 0.85 * Math.exp(-d * d);
+      }
+      return f;
+    }
+
+    step(dt) {
+      const cols = this.cols, rows = this.rows;
+      this.time += dt;
+      this.flow.fill(0);
+
+      // Wave injection into the ocean row
+      if (this.waveActive) {
+        const s = this.waveSpec;
+        const dur = s.duration || 1.6;
+        const t = this.waveT;
+        const env = Math.sin(Math.PI * Math.min(1, t / dur));
+        const base = (rows - 1) * cols;
+        for (let x = 0; x < cols; x++) {
+          this.w[base + x] += s.s * env * this.waveFactor(x) * dt * 3.0;
+        }
+        this.waveT += dt;
+        if (t >= dur) this.waveActive = false;
+      }
+
+      // Water flow
+      const sub = 3;
+      for (let k = 0; k < sub; k++) this.flowStep(dt / sub);
+
+      // Ocean row drains back to sea when not surging
+      if (!this.waveActive) {
+        const base = (rows - 1) * cols;
+        const keep = Math.max(0, 1 - 5 * dt);
+        for (let x = 0; x < cols; x++) this.w[base + x] *= keep;
+      }
+
+      // Absorption, drying, erosion, slump
+      const wetStart = rows - 1 - this.wetRows;
+      for (let y = 0; y < rows - 1; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          if (this.rock[i]) continue;
+          const wv = this.w[i];
+          if (wv > 0.002) {
+            this.m[i] = Math.min(1, this.m[i] + wv * dt * 1.5 + dt * 0.5);
+            this.w[i] = Math.max(0, wv - 0.05 * dt);
+          } else {
+            this.w[i] = 0;
+            this.m[i] = Math.max(0, this.m[i] - this.dryRate * dt);
+          }
+          if (y >= wetStart) this.m[i] = Math.max(this.m[i], 0.85);
+
+          // Erosion of built sand by rushing / pressing water.
+          // Only the part of a neighbour's water column that sits above this
+          // cell's ground level touches the sand; water down in a moat does not.
+          if (this.h[i] > 0) {
+            let f = this.flow[i];
+            let press = 0;
+            const gi = this.g[i];
+            for (let d = 0; d < 4; d++) {
+              const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+              if (!this.inBounds(nx, ny)) continue;
+              const j = ny * cols + nx;
+              const wj = this.w[j];
+              if (wj <= 0.002) continue;
+              const above = this.g[j] + this.h[j] + wj - gi; // water surface above wall base
+              if (above <= 0) continue;
+              const contact = Math.min(1, above / wj);
+              f += 0.5 * this.flow[j] * contact;
+              if (above > press) press = above;
+            }
+            const rate = f / dt;
+            let ero = Math.max(0, rate - this.eroThr) * this.eroRate + press * this.pressRate;
+            if (ero > 0) {
+              ero *= dt * (1.7 - this.m[i]);
+              this.h[i] = Math.max(0, this.h[i] - ero);
+            }
+          }
+        }
+      }
+      this.slump(dt);
+    }
+
+    flowStep(dt) {
+      const cols = this.cols, rows = this.rows;
+      const w = this.w, dw = this.dw, flow = this.flow;
+      dw.fill(0);
+      const rate = Math.min(0.45, dt * this.flowRate);
+      const qs = [0, 0, 0, 0];
+      const js = [0, 0, 0, 0];
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          const wi = w[i];
+          if (wi < 1e-4) continue;
+          const si = this.g[i] + this.h[i] + wi;
+          let tot = 0;
+          for (let d = 0; d < 4; d++) {
+            qs[d] = 0;
+            const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+            const j = ny * cols + nx;
+            if (this.rock[j]) continue;
+            const diff = si - (this.g[j] + this.h[j] + w[j]);
+            if (diff > 0) { qs[d] = diff * 0.5; js[d] = j; tot += diff * 0.5; }
+          }
+          if (tot <= 0) continue;
+          let scale = rate;
+          if (tot * scale > wi) scale = wi / tot;
+          for (let d = 0; d < 4; d++) {
+            const q = qs[d] * scale;
+            if (q <= 0) continue;
+            const j = js[d];
+            dw[i] -= q; dw[j] += q;
+            flow[i] += q; flow[j] += q;
+          }
+        }
+      }
+      for (let i = 0; i < w.length; i++) {
+        w[i] += dw[i];
+        if (w[i] < 0) w[i] = 0;
+      }
+    }
+
+    slump(dt) {
+      const cols = this.cols, rows = this.rows;
+      const p = Math.min(1, dt * 5);
+      for (let y = 0; y < rows - 1; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          if (this.rock[i]) continue;
+          const limit = 1.0 + 3.2 * this.m[i];
+          const si = this.g[i] + this.h[i];
+          for (let d = 0; d < 4; d++) {
+            const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+            if (!this.inBounds(nx, ny) || ny === rows - 1) continue;
+            const j = ny * cols + nx;
+            if (this.rock[j]) continue;
+            const diff = si - (this.g[j] + this.h[j]);
+            if (diff > limit && this.rand() < p) {
+              const mv = Math.min(0.5, (diff - limit) * 0.5 + 0.15);
+              if (this.h[j] + mv > this.maxH) continue;
+              this.h[i] -= mv;
+              this.h[j] += mv;
+              // moved sand carries its moisture
+              this.m[j] = Math.max(this.m[j], this.m[i] * 0.9);
+            }
+          }
+        }
+      }
+    }
+
+    // Player digs one unit; returns {amount, moist}
+    dig(x, y, amount) {
+      if (!this.inBounds(x, y) || this.isOcean(y)) return { amount: 0, moist: 0 };
+      const i = this.idx(x, y);
+      if (this.rock[i]) return { amount: 0, moist: 0 };
+      const old = this.h[i];
+      const nh = Math.max(this.minH, old - amount);
+      this.h[i] = nh;
+      return { amount: old - nh, moist: this.m[i] };
+    }
+
+    // Player places sand of a given moisture; returns amount actually placed
+    place(x, y, amount, moist) {
+      if (!this.inBounds(x, y) || this.isOcean(y)) return 0;
+      const i = this.idx(x, y);
+      if (this.rock[i]) return 0;
+      const old = this.h[i];
+      const nh = Math.min(this.maxH, old + amount);
+      const placed = nh - old;
+      if (placed <= 0) return 0;
+      this.h[i] = nh;
+      const weight = Math.max(0.5, Math.abs(old));
+      this.m[i] = (this.m[i] * weight + moist * placed) / (weight + placed);
+      return placed;
+    }
+
+    // Structure check: all cells at or above required height (with tolerance)
+    standing(st) {
+      let ok = 0, total = 0;
+      for (let y = st.y; y < st.y + st.h; y++) {
+        for (let x = st.x; x < st.x + st.w; x++) {
+          if (!this.inBounds(x, y)) continue;
+          total++;
+          if (this.h[this.idx(x, y)] >= st.req - 0.5) ok++;
+        }
+      }
+      return { ok, total, standing: ok === total };
+    }
+  }
+
+  const api = { Sim, mulberry32 };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Tidewright = Object.assign(root.Tidewright || {}, api);
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Tidewright - hand-made levels. Grid is 20 x 28, ocean is row 27.
+// Structure rects: x,y,w,h in cells; req = required sand height.
+(function (root) {
+  'use strict';
+
+  const LEVELS = [
+    {
+      name: 'First Tower',
+      desc: 'Dig wet sand near the water and pile it onto the outline. Keep the tower standing through two waves.',
+      hint: 'Wet sand holds. Dry sand crumbles.',
+      prep: 25, gap: 12,
+      waves: [{ s: 1.8 }, { s: 2.2 }],
+      structs: [{ name: 'Tower', x: 9, y: 19, w: 2, h: 2, req: 2 }],
+    },
+    {
+      name: 'Sea Wall',
+      desc: 'A long wall takes more sand than you think. Fill your bucket from the wet zone and paint it along the line.',
+      hint: 'Hold on a cell to pile sand higher.',
+      prep: 26, gap: 12,
+      waves: [{ s: 2.0 }, { s: 2.4 }, { s: 2.8 }],
+      structs: [{ name: 'Wall', x: 6, y: 19, w: 8, h: 1, req: 2 }],
+    },
+    {
+      name: 'Dig a Moat',
+      desc: 'This tower needs to be tall, and the waves are bigger. A trench dug in front will swallow the surge before it hits.',
+      hint: 'Dig below the beach to make a moat.',
+      prep: 28, gap: 12,
+      waves: [{ s: 2.5 }, { s: 3.0 }, { s: 3.5 }],
+      structs: [{ name: 'Tower', x: 9, y: 18, w: 2, h: 2, req: 3 }],
+    },
+    {
+      name: 'Twin Towers',
+      desc: 'Two towers, one bucket. Split your time and repair whichever one the sea picks on.',
+      hint: 'Build a little higher than required for a buffer.',
+      prep: 30, gap: 12,
+      waves: [{ s: 2.6 }, { s: 3.0 }, { s: 3.4 }],
+      structs: [
+        { name: 'West Tower', x: 5, y: 18, w: 2, h: 2, req: 3 },
+        { name: 'East Tower', x: 13, y: 18, w: 2, h: 2, req: 3 },
+      ],
+    },
+    {
+      name: 'Rocky Cove',
+      desc: 'Rocks funnel the whole sea through one gap. Whatever you build behind it gets the full force. Redirect it.',
+      hint: 'Water follows the lowest path. Give it one.',
+      prep: 30, gap: 13,
+      rocks: [{ x: 0, y: 21, w: 8, h: 2 }, { x: 12, y: 21, w: 8, h: 2 }],
+      waves: [{ s: 3.0, focus: 9.5, width: 3 }, { s: 3.5, focus: 9.5, width: 3 }, { s: 4.0, focus: 9.5, width: 3 }, { s: 4.0, focus: 9.5, width: 3 }],
+      structs: [{ name: 'Keep', x: 8, y: 16, w: 3, h: 2, req: 2 }],
+    },
+    {
+      name: 'Sandbar',
+      desc: 'The waves alternate: big, small, bigger, small. Use the quiet ones to rebuild the outer wall that shields the tower.',
+      hint: 'A wall in front takes the hit for what is behind it.',
+      prep: 30, gap: 12,
+      waves: [{ s: 4.0 }, { s: 2.0 }, { s: 4.5 }, { s: 2.5 }],
+      structs: [
+        { name: 'Outer Wall', x: 7, y: 20, w: 6, h: 1, req: 2 },
+        { name: 'Tower', x: 9, y: 16, w: 2, h: 2, req: 3 },
+      ],
+    },
+    {
+      name: 'Tidal Flat',
+      desc: 'A flat, soaked beach. Every grain is wet right now, but the sun here is brutal and the water runs a long way.',
+      hint: 'Wet sand dries. Rewet your walls or rebuild them.',
+      prep: 28, gap: 14,
+      sim: { allWet: true, dryRate: 0.035, slope: 0.9 },
+      waves: [{ s: 2.5 }, { s: 3.0 }, { s: 3.5 }, { s: 4.0 }],
+      structs: [{ name: 'Keep', x: 8, y: 17, w: 3, h: 3, req: 2 }],
+    },
+    {
+      name: 'The Castle',
+      desc: 'A keep and two towers. Five waves, each bigger than the last. Plan your moats before the first one lands.',
+      hint: 'Moats around the whole works, not just the front.',
+      prep: 36, gap: 14,
+      waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }],
+      structs: [
+        { name: 'Keep', x: 8, y: 17, w: 3, h: 3, req: 2 },
+        { name: 'West Tower', x: 5, y: 17, w: 2, h: 2, req: 3 },
+        { name: 'East Tower', x: 13, y: 17, w: 2, h: 2, req: 3 },
+      ],
+    },
+    {
+      name: 'Storm Surge',
+      desc: 'The sea is coming in sideways. Watch the ripples on the water before each wave to see which side it hits.',
+      hint: 'Ripples show where the surge will land.',
+      prep: 32, gap: 14,
+      waves: [
+        { s: 4.0, focus: 4, width: 4 },
+        { s: 4.0, focus: 15, width: 4 },
+        { s: 5.0, focus: 9.5, width: 5 },
+        { s: 5.5, focus: 4, width: 6 },
+        { s: 5.5, focus: 15, width: 6 },
+      ],
+      structs: [
+        { name: 'Tower', x: 9, y: 17, w: 2, h: 2, req: 3 },
+        { name: 'West Wall', x: 2, y: 19, w: 5, h: 1, req: 2 },
+        { name: 'East Wall', x: 13, y: 19, w: 5, h: 1, req: 2 },
+      ],
+    },
+    {
+      name: 'High Tide',
+      desc: 'The full castle. Six waves, and the last one is the biggest the sea has thrown at you. Hold everything.',
+      hint: 'Overbuild the towers. Keep the bucket full between waves.',
+      prep: 45, gap: 15,
+      waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }, { s: 6.0 }],
+      structs: [
+        { name: 'Keep', x: 8, y: 16, w: 3, h: 3, req: 2 },
+        { name: 'NW Tower', x: 4, y: 16, w: 2, h: 2, req: 3 },
+        { name: 'NE Tower', x: 14, y: 16, w: 2, h: 2, req: 3 },
+        { name: 'SW Tower', x: 4, y: 20, w: 2, h: 2, req: 3 },
+        { name: 'SE Tower', x: 14, y: 20, w: 2, h: 2, req: 3 },
+        { name: 'Front Wall', x: 7, y: 21, w: 6, h: 1, req: 2 },
+      ],
+    },
+  ];
+
+  const api = { LEVELS };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Tidewright = Object.assign(root.Tidewright || {}, api);
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Tidewright - game shell: rendering, input, level flow. Depends on sim.js and levels.js.
+(function () {
+  'use strict';
+  const { Sim, LEVELS } = window.Tidewright;
+
+  const COLS = 20, ROWS = 28;
+  const BUCKET_CAP = 10;
+  const SETTLE = 3.5;
+
+  const $ = id => document.getElementById(id);
+  const canvas = $('beach');
+  const ctx = canvas.getContext('2d');
+
+  // ---------- persistent progress ----------
+  function loadProgress() {
+    try { return Math.max(0, Math.min(LEVELS.length - 1, parseInt(localStorage.getItem('tw_unlocked') || '0', 10) || 0)); }
+    catch (e) { return 0; }
+  }
+  function saveProgress(n) {
+    try { localStorage.setItem('tw_unlocked', String(n)); } catch (e) { /* ignore */ }
+  }
+  let unlocked = loadProgress();
+
+  // ---------- game state ----------
+  const G = {
+    level: 0,
+    sim: null,
+    structs: [],
+    phase: 'menu',   // menu | intro | build | wave | settle | won | lost
+    waveIndex: 0,
+    timer: 0,
+    bucket: { sand: 0, moist: 0 },
+    mode: 'dig',
+    message: '',
+    seedCounter: 1,
+    lastWaveT: -99,
+    shake: 0,
+  };
+
+  // ---------- layout ----------
+  let cell = 16, ox = 0, oy = 0, dpr = 1, lastW = -1, lastH = -1;
+  function layout() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    lastW = rect.width; lastH = rect.height;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    cell = Math.floor(Math.min(rect.width / COLS, rect.height / ROWS));
+    ox = Math.floor((rect.width - cell * COLS) / 2);
+    oy = Math.floor((rect.height - cell * ROWS) / 2);
+  }
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', layout);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
+
+  // ---------- level setup ----------
+  function startLevel(n) {
+    G.level = n;
+    const L = LEVELS[n];
+    G.sim = new Sim(COLS, ROWS, Object.assign({ seed: 1000 * (n + 1) + (G.seedCounter++) }, L.sim || {}));
+    (L.rocks || []).forEach(r => {
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) G.sim.setRock(x, y);
+    });
+    G.structs = L.structs.map(s => Object.assign({}, s));
+    G.waveIndex = 0;
+    G.timer = L.prep;
+    G.bucket = { sand: 0, moist: 0 };
+    G.mode = 'dig';
+    G.phase = 'intro';
+    G.message = '';
+    G.lastWaveT = -99;
+    setMode('dig');
+    $('intro-title').textContent = `${n + 1}. ${L.name}`;
+    $('intro-desc').textContent = L.desc;
+    $('intro-hint').textContent = L.hint;
+    $('intro-waves').textContent = `${L.waves.length} wave${L.waves.length > 1 ? 's' : ''}`;
+    showOverlay('intro');
+    $('hud-level').textContent = L.name;
+    updateHud();
+  }
+
+  function showOverlay(name) {
+    document.querySelectorAll('.overlay').forEach(el => { el.hidden = el.dataset.name !== name; });
+    $('overlays').hidden = !name;
+  }
+
+  function buildMenu() {
+    const grid = $('level-grid');
+    grid.innerHTML = '';
+    LEVELS.forEach((L, i) => {
+      const b = document.createElement('button');
+      b.className = 'lvl' + (i > unlocked ? ' locked' : '') + (i < unlocked ? ' done' : '');
+      b.innerHTML = `<span class="num">${i + 1}</span><span class="nm">${L.name}</span>`;
+      b.disabled = i > unlocked;
+      b.addEventListener('click', () => startLevel(i));
+      grid.appendChild(b);
+    });
+  }
+
+  // ---------- flow ----------
+  function callWave() {
+    if (G.phase !== 'build') return;
+    const L = LEVELS[G.level];
+    const down = G.structs.filter(s => !G.sim.standing(s).standing);
+    if (down.length) {
+      lose(`${down[0].name} was not standing when wave ${G.waveIndex + 1} came in.`);
+      return;
+    }
+    G.sim.startWave(L.waves[G.waveIndex]);
+    G.phase = 'wave';
+    G.lastWaveT = G.sim.time;
+    G.shake = 0.5;
+  }
+
+  function lose(msg) {
+    G.phase = 'lost';
+    G.message = msg;
+    $('lost-msg').textContent = msg;
+    showOverlay('lost');
+  }
+
+  function win() {
+    G.phase = 'won';
+    if (G.level >= unlocked && G.level + 1 < LEVELS.length) { unlocked = G.level + 1; saveProgress(unlocked); }
+    else if (G.level + 1 >= LEVELS.length) { unlocked = LEVELS.length - 1; saveProgress(unlocked); }
+    $('won-msg').textContent = G.level + 1 < LEVELS.length
+      ? `Everything held. The tide is out on ${LEVELS[G.level].name}.`
+      : 'Everything held through the highest tide. That is the whole beach.';
+    $('btn-next').hidden = G.level + 1 >= LEVELS.length;
+    showOverlay('won');
+  }
+
+  function update(dt) {
+    const L = LEVELS[G.level];
+    if (G.phase === 'menu' || G.phase === 'intro') return;
+    G.sim.step(dt);
+    if (G.shake > 0) G.shake = Math.max(0, G.shake - dt);
+    applyHold(dt);
+
+    if (G.phase === 'build') {
+      G.timer -= dt;
+      if (G.timer <= 0) { G.timer = 0; callWave(); }
+    } else if (G.phase === 'wave') {
+      if (!G.sim.waveActive) { G.phase = 'settle'; G.timer = SETTLE; }
+    } else if (G.phase === 'settle') {
+      G.timer -= dt;
+      if (G.timer <= 0) {
+        G.waveIndex++;
+        if (G.waveIndex < L.waves.length) {
+          G.phase = 'build';
+          G.timer = L.gap;
+        } else {
+          const down = G.structs.filter(s => !G.sim.standing(s).standing);
+          if (down.length) lose(`${down[0].name} did not survive the last wave.`);
+          else win();
+        }
+      }
+    }
+    updateHud();
+  }
+
+  // ---------- HUD ----------
+  const hudWave = $('hud-wave'), hudTimer = $('hud-timer'), hudBar = $('hud-bar'), hudStatus = $('hud-status');
+  const bucketFill = $('bucket-fill'), bucketNum = $('bucket-num');
+  const btnCall = $('btn-call');
+  function updateHud() {
+    const L = LEVELS[G.level];
+    const total = L.waves.length;
+    if (G.phase === 'build') {
+      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
+      hudTimer.textContent = `${Math.ceil(G.timer)}s`;
+      const span = G.waveIndex === 0 ? L.prep : L.gap;
+      hudBar.style.width = `${Math.max(0, 100 * (1 - G.timer / span))}%`;
+      hudBar.className = 'bar' + (G.timer < 4 ? ' urgent' : '');
+      btnCall.disabled = false;
+    } else if (G.phase === 'wave') {
+      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
+      hudTimer.textContent = 'surge';
+      hudBar.style.width = '100%';
+      hudBar.className = 'bar surge';
+      btnCall.disabled = true;
+    } else if (G.phase === 'settle') {
+      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
+      hudTimer.textContent = 'settling';
+      hudBar.style.width = '100%';
+      hudBar.className = 'bar surge';
+      btnCall.disabled = true;
+    } else {
+      hudWave.textContent = `${total} waves`;
+      hudTimer.textContent = '';
+      hudBar.style.width = '0%';
+      btnCall.disabled = true;
+    }
+    const st = G.structs.map(s => G.sim.standing(s));
+    const up = st.filter(s => s.standing).length;
+    hudStatus.textContent = `${up}/${st.length} standing`;
+    hudStatus.className = up === st.length ? 'ok' : 'bad';
+
+    bucketFill.style.height = `${(G.bucket.sand / BUCKET_CAP) * 100}%`;
+    const mo = G.bucket.moist;
+    bucketFill.style.background = mo > 0.6 ? '#a8865a' : mo > 0.3 ? '#cdb182' : '#e9d7a8';
+    bucketNum.textContent = `${Math.floor(G.bucket.sand)}`;
+  }
+
+  function setMode(m) {
+    G.mode = m;
+    $('btn-dig').classList.toggle('active', m === 'dig');
+    $('btn-build').classList.toggle('active', m === 'build');
+  }
+
+  // ---------- input ----------
+  const ptr = { down: false, cx: -1, cy: -1, hold: 0 };
+  function cellAt(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((evt.clientX - rect.left - ox) / cell);
+    const y = Math.floor((evt.clientY - rect.top - oy) / cell);
+    return { x, y };
+  }
+  function act(x, y) {
+    if (G.phase !== 'build' && G.phase !== 'wave' && G.phase !== 'settle') return;
+    if (!G.sim.inBounds(x, y)) return;
+    if (G.mode === 'dig') {
+      if (G.bucket.sand >= BUCKET_CAP - 0.01) return;
+      const r = G.sim.dig(x, y, Math.min(1, BUCKET_CAP - G.bucket.sand));
+      if (r.amount > 0) {
+        const tot = G.bucket.sand + r.amount;
+        G.bucket.moist = (G.bucket.moist * G.bucket.sand + r.moist * r.amount) / tot;
+        G.bucket.sand = tot;
+      }
+    } else {
+      if (G.bucket.sand < 0.05) return;
+      const placed = G.sim.place(x, y, Math.min(1, G.bucket.sand), G.bucket.moist);
+      G.bucket.sand = Math.max(0, G.bucket.sand - placed);
+    }
+  }
+  function applyHold(dt) {
+    if (!ptr.down) return;
+    ptr.hold += dt;
+    if (ptr.hold >= 0.22) { ptr.hold = 0; act(ptr.cx, ptr.cy); }
+  }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-captured pointer */ }
+    const c = cellAt(e);
+    ptr.down = true; ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0;
+    act(c.x, c.y);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!ptr.down) return;
+    e.preventDefault();
+    const c = cellAt(e);
+    if (c.x !== ptr.cx || c.y !== ptr.cy) {
+      ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0;
+      act(c.x, c.y);
+    }
+  });
+  const stop = e => { ptr.down = false; };
+  canvas.addEventListener('pointerup', stop);
+  canvas.addEventListener('pointercancel', stop);
+  canvas.addEventListener('lostpointercapture', stop);
+
+  $('btn-dig').addEventListener('click', () => setMode('dig'));
+  $('btn-build').addEventListener('click', () => setMode('build'));
+  btnCall.addEventListener('click', callWave);
+  $('btn-restart').addEventListener('click', () => startLevel(G.level));
+  $('btn-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
+  $('btn-go').addEventListener('click', () => { G.phase = 'build'; showOverlay(null); updateHud(); });
+  $('btn-retry').addEventListener('click', () => startLevel(G.level));
+  $('btn-next').addEventListener('click', () => startLevel(Math.min(LEVELS.length - 1, G.level + 1)));
+  $('btn-lost-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
+  $('btn-won-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
+  $('btn-reset').addEventListener('click', () => { unlocked = 0; saveProgress(0); buildMenu(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'd' || e.key === 'D') setMode('dig');
+    if (e.key === 'b' || e.key === 'B') setMode('build');
+    if (e.key === ' ' && G.phase === 'build') { e.preventDefault(); callWave(); }
+  });
+
+  // ---------- rendering ----------
+  const DRY = [236, 216, 168], WET = [166, 134, 88];
+  function sandColor(h, m, out) {
+    let r = DRY[0] + (WET[0] - DRY[0]) * m;
+    let g = DRY[1] + (WET[1] - DRY[1]) * m;
+    let b = DRY[2] + (WET[2] - DRY[2]) * m;
+    let k = 1;
+    if (h > 0) k = 1 + 0.075 * h; else if (h < 0) k = 1 + 0.11 * h;
+    out[0] = Math.min(255, r * k); out[1] = Math.min(255, g * k); out[2] = Math.min(255, b * k);
+  }
+  const tmp = [0, 0, 0];
+  // Stable per-cell noise for foam and spray placement (0..1)
+  function hash(x, y, k) {
+    let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(k | 0, 1274126177) | 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // Phones resize the viewport when the address bar shows or hides, and the
+  // resize event is not always delivered, so re-measure whenever the canvas moves.
+  function layoutIfNeeded() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width !== lastW || rect.height !== lastH) layout();
+  }
+
+  function render(t) {
+    layoutIfNeeded();
+    const sim = G.sim;
+    const W = canvas.width / dpr, H = canvas.height / dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0b1b2b';
+    ctx.fillRect(0, 0, W, H);
+    if (!sim) return;
+
+    let sx = 0, sy = 0;
+    // whole-pixel shake only: sub-pixel offsets draw seams between cells
+    if (G.shake > 0) { sx = Math.round((Math.random() - 0.5) * 4 * G.shake); sy = Math.round((Math.random() - 0.5) * 4 * G.shake); }
+    ctx.save();
+    ctx.translate(ox + sx, oy + sy);
+
+    const L = LEVELS[G.level];
+    // sand and rocks
+    for (let y = 0; y < ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        const px = x * cell, py = y * cell;
+        if (sim.rock[i]) {
+          ctx.fillStyle = '#5f666d';
+          ctx.fillRect(px, py, cell, cell);
+          ctx.fillStyle = '#7c848c';
+          ctx.fillRect(px + 1, py + 1, cell - 2, Math.max(2, cell * 0.35));
+          continue;
+        }
+        sandColor(sim.h[i], sim.m[i], tmp);
+        ctx.fillStyle = `rgb(${tmp[0] | 0},${tmp[1] | 0},${tmp[2] | 0})`;
+        ctx.fillRect(px, py, cell, cell);
+      }
+    }
+    // cliff edges (a cell that stands above its right/bottom neighbour)
+    const edge = Math.max(2, Math.floor(cell * 0.18));
+    ctx.fillStyle = 'rgba(70,45,15,0.45)';
+    for (let y = 0; y < ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        if (sim.rock[i]) continue;
+        const si = sim.g[i] + sim.h[i];
+        const px = x * cell, py = y * cell;
+        if (x + 1 < COLS) {
+          const j = i + 1;
+          if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px + cell - edge, py, edge, cell);
+        }
+        if (y + 1 < ROWS - 1) {
+          const j = i + COLS;
+          if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px, py + cell - edge, cell, edge);
+        }
+        // highlight on top edge of raised sand
+        if (sim.h[i] >= 0.8) {
+          ctx.fillStyle = 'rgba(255,250,230,0.35)';
+          ctx.fillRect(px, py, cell, Math.max(1, Math.floor(cell * 0.12)));
+          ctx.fillStyle = 'rgba(70,45,15,0.45)';
+        }
+      }
+    }
+    const now = t * 0.001;
+    // wet sheen: sand the water just left keeps a mirror shine for a moment
+    for (let y = 0; y < ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        if (sim.rock[i] || sim.w[i] >= 0.012) continue;
+        const sheen = (sim.m[i] - 0.972) / 0.028;
+        if (sheen <= 0) continue;
+        // soft-edged so neighbouring cells blend instead of reading as tiles
+        const s = Math.min(1, sheen);
+        const sg = ctx.createRadialGradient(x * cell + cell / 2, y * cell + cell / 2, 0, x * cell + cell / 2, y * cell + cell / 2, cell * 0.9);
+        sg.addColorStop(0, `rgba(215,235,255,${(0.22 * s).toFixed(3)})`);
+        sg.addColorStop(1, 'rgba(215,235,255,0)');
+        ctx.fillStyle = sg;
+        ctx.fillRect(x * cell - cell * 0.4, y * cell - cell * 0.4, cell * 1.8, cell * 1.8);
+      }
+    }
+    // water body
+    const wet = i => sim.w[i] >= 0.012;
+    for (let y = 0; y < ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        const wv = sim.w[i];
+        if (wv < 0.012) continue;
+        const a = Math.min(0.85, 0.24 + wv * 0.38);
+        // gentle shimmer so standing water is never a flat block
+        const sh = Math.sin(now * 2.2 + x * 0.9 + y * 1.3) * 0.04;
+        ctx.fillStyle = `rgba(${(36 + sh * 200) | 0},${(118 + sh * 200) | 0},${(196 + sh * 120) | 0},${a.toFixed(3)})`;
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+      }
+    }
+    // foam: bubbles where the water rushes, crests along its leading edges
+    const crestW = Math.max(1.5, cell * 0.16);
+    ctx.lineCap = 'round';
+    for (let y = 0; y < ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        if (!wet(i)) continue;
+        const f = sim.flow[i];
+        const px = x * cell, py = y * cell;
+        if (f > 0.015) {
+          const fa = Math.min(0.8, f * 7);
+          for (let k = 0; k < 3; k++) {
+            const ph = hash(x, y, k);
+            const tw = 0.5 + 0.5 * Math.sin(now * 9 + ph * 6.283);
+            const bx = px + (0.15 + 0.7 * hash(x, y, k + 11)) * cell;
+            const by = py + (0.15 + 0.7 * hash(y, x, k + 23)) * cell;
+            const r = cell * (0.07 + 0.11 * hash(x + k, y, 5)) * (0.6 + 0.4 * tw);
+            ctx.fillStyle = `rgba(245,252,255,${(fa * (0.35 + 0.65 * tw)).toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.283); ctx.fill();
+          }
+        }
+        const upDry = y === 0 || !wet(i - COLS);
+        const leftDry = x === 0 || !wet(i - 1);
+        const rightDry = x === COLS - 1 || !wet(i + 1);
+        if (!upDry && !leftDry && !rightDry) continue;
+        const ca = Math.min(0.95, 0.4 + f * 5);
+        if (upDry) {
+          ctx.strokeStyle = `rgba(255,255,255,${ca.toFixed(3)})`;
+          ctx.lineWidth = crestW;
+          ctx.beginPath();
+          for (let s = 0; s <= cell; s += 3) {
+            const yy = py + cell * 0.18 + Math.sin((px + s) * 0.45 + now * 11 + y) * cell * 0.1;
+            if (s === 0) ctx.moveTo(px + s, yy); else ctx.lineTo(px + s, yy);
+          }
+          ctx.stroke();
+        }
+        if (leftDry || rightDry) {
+          ctx.strokeStyle = `rgba(255,255,255,${(ca * 0.6).toFixed(3)})`;
+          ctx.lineWidth = crestW * 0.7;
+          ctx.beginPath();
+          const ex = leftDry ? px + cell * 0.15 : px + cell * 0.85;
+          for (let s = 0; s <= cell; s += 3) {
+            const xx = ex + Math.sin((py + s) * 0.45 + now * 9 + x) * cell * 0.08;
+            if (s === 0) ctx.moveTo(xx, py + s); else ctx.lineTo(xx, py + s);
+          }
+          ctx.stroke();
+        }
+      }
+    }
+    // ocean row
+    const oyp = (ROWS - 1) * cell;
+    const grad = ctx.createLinearGradient(0, oyp, 0, oyp + cell);
+    grad.addColorStop(0, '#2b7fc9');
+    grad.addColorStop(1, '#155a9c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, oyp, COLS * cell, cell);
+    // breaker: a crest that swells up off the sea row and curls over as the surge starts
+    if (sim.waveActive && sim.waveSpec) {
+      const spec = sim.waveSpec;
+      const dur = spec.duration || 1.6;
+      const p = Math.min(1, sim.waveT / dur);
+      const env = Math.sin(Math.PI * p);
+      const lift = cell * (1.1 + 0.35 * spec.s);
+      // dark swell under the crest
+      ctx.beginPath();
+      ctx.moveTo(0, oyp + cell);
+      for (let x = 0; x <= COLS; x++) {
+        const fac = sim.waveFactor(Math.min(COLS - 1, x));
+        const yy = oyp + cell * 0.3 - env * fac * lift * 0.6 + Math.sin(x * 1.3 + now * 7) * cell * 0.1;
+        ctx.lineTo(x * cell, yy);
+      }
+      ctx.lineTo(COLS * cell, oyp + cell);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(16,62,120,${(0.35 + 0.4 * env).toFixed(3)})`;
+      ctx.fill();
+      // white crest, brightest at the peak of the surge
+      ctx.beginPath();
+      ctx.moveTo(0, oyp + cell * 0.6);
+      for (let x = 0; x <= COLS; x++) {
+        const fac = sim.waveFactor(Math.min(COLS - 1, x));
+        const yy = oyp - env * fac * lift + Math.sin(x * 1.7 + now * 9) * cell * 0.15;
+        ctx.lineTo(x * cell, yy);
+      }
+      ctx.lineTo(COLS * cell, oyp + cell * 0.6);
+      ctx.closePath();
+      const cg = ctx.createLinearGradient(0, oyp - lift, 0, oyp + cell);
+      cg.addColorStop(0, `rgba(255,255,255,${(0.9 * env).toFixed(3)})`);
+      cg.addColorStop(0.5, `rgba(200,230,255,${(0.55 * env).toFixed(3)})`);
+      cg.addColorStop(1, 'rgba(120,190,240,0.05)');
+      ctx.fillStyle = cg;
+      ctx.fill();
+      // spray thrown off the crest
+      ctx.fillStyle = `rgba(255,255,255,${(0.8 * env).toFixed(3)})`;
+      for (let k = 0; k < 24; k++) {
+        const fx = hash(k, 1, 1) * COLS;
+        const fac = sim.waveFactor(Math.min(COLS - 1, Math.floor(fx)));
+        const life = (now * 1.6 + hash(k, 2, 2)) % 1;
+        const sx2 = fx * cell + Math.sin(k) * cell * 0.3;
+        const sy2 = oyp - env * fac * lift - life * cell * 1.2;
+        const r = cell * 0.06 * (1 - life) * env * fac;
+        if (r <= 0.2) continue;
+        ctx.beginPath(); ctx.arc(sx2, sy2, r, 0, 6.283); ctx.fill();
+      }
+    }
+    // moving surface highlights
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    for (let k = 0; k < 3; k++) {
+      const yy = oyp + cell * (0.25 + 0.25 * k) + Math.sin(t * 0.002 + k) * 1.5;
+      ctx.beginPath();
+      for (let x = 0; x <= COLS * cell; x += 4) {
+        const y2 = yy + Math.sin(x * 0.08 + t * 0.003 + k * 2) * 1.2;
+        if (x === 0) ctx.moveTo(x, y2); else ctx.lineTo(x, y2);
+      }
+      ctx.stroke();
+    }
+    // ripples announcing the next wave
+    if (G.phase === 'build') {
+      const spec = L.waves[G.waveIndex];
+      const span = G.waveIndex === 0 ? L.prep : L.gap;
+      const prog = 1 - G.timer / span;
+      const intensity = Math.max(0, (prog - 0.35) / 0.65);
+      if (intensity > 0) {
+        const fx = spec.focus != null ? (spec.focus + 0.5) * cell : COLS * cell / 2;
+        const width = spec.focus != null ? (spec.width || 5) * cell * 1.6 : COLS * cell;
+        ctx.strokeStyle = `rgba(255,255,255,${(0.25 + 0.55 * intensity).toFixed(3)})`;
+        ctx.lineWidth = 1.5;
+        const rings = 1 + Math.floor(intensity * 3);
+        for (let k = 0; k < rings; k++) {
+          const ph = ((t * 0.0015) + k * 0.33) % 1;
+          const yy = oyp + cell * (0.15 + 0.7 * ph);
+          const half = width * (0.45 + 0.35 * ph);
+          ctx.beginPath();
+          ctx.moveTo(Math.max(0, fx - half), yy);
+          ctx.quadraticCurveTo(fx, yy - cell * 0.35 * intensity, Math.min(COLS * cell, fx + half), yy);
+          ctx.stroke();
+        }
+      }
+    }
+    // wet zone tint line
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    const wy = (ROWS - 1 - sim.wetRows) * cell;
+    ctx.moveTo(0, wy); ctx.lineTo(COLS * cell, wy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // blueprints
+    ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.62))}px system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    G.structs.forEach(s => {
+      const st = sim.standing(s);
+      const col = st.standing ? '46,184,114' : st.ok > 0 ? '240,180,41' : '226,84,84';
+      const px = s.x * cell, py = s.y * cell, pw = s.w * cell, ph = s.h * cell;
+      ctx.fillStyle = `rgba(${col},0.14)`;
+      ctx.fillRect(px, py, pw, ph);
+      ctx.strokeStyle = `rgba(${col},0.95)`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 3]);
+      ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+      ctx.setLineDash([]);
+      // required height badge
+      const label = `${s.req}`;
+      const bw = Math.max(12, cell * 0.7), bh = Math.max(12, cell * 0.7);
+      ctx.fillStyle = `rgba(${col},0.95)`;
+      ctx.fillRect(px + pw - bw - 2, py + 2, bw, bh);
+      ctx.fillStyle = '#0b1b2b';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, px + pw - bw / 2 - 2, py + 3);
+      // flag on standing towers
+      if (st.standing && s.req >= 3) {
+        const fx = px + pw / 2, fy = py - cell * 0.15;
+        ctx.strokeStyle = '#3b2a15';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy + cell * 0.9); ctx.stroke();
+        ctx.fillStyle = '#e5484d';
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + cell * 0.55, fy + cell * 0.22); ctx.lineTo(fx, fy + cell * 0.44); ctx.closePath(); ctx.fill();
+      }
+    });
+
+    // cursor cell
+    if (ptr.down && sim.inBounds(ptr.cx, ptr.cy) && ptr.cy < ROWS - 1) {
+      ctx.strokeStyle = G.mode === 'dig' ? 'rgba(20,20,20,0.7)' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ptr.cx * cell + 1, ptr.cy * cell + 1, cell - 2, cell - 2);
+    }
+    ctx.restore();
+  }
+
+  // ---------- main loop ----------
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(0.045, (t - last) / 1000);
+    last = t;
+    if (G.sim) update(dt);
+    render(t);
+    requestAnimationFrame(frame);
+  }
+
+  // Debug handle for headless play-testing: window.__tw.step(dt) advances one frame.
+  window.__tw = { G, step: dt => { update(dt); render(performance.now()); }, LEVELS };
+
+  layout();
+  buildMenu();
+  showOverlay('menu');
+  requestAnimationFrame(frame);
+})();
+
+</script>
