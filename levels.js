@@ -1,4 +1,4 @@
-// Tidewright - hand-made levels. Grid is 20 x 28, ocean is row 27.
+// Tidewright - hand-made levels. Grid is 16 x 28, ocean is row 27.
 // Structure rects: x,y,w,h in cells; req = required sand height; type = tower | keep | wall.
 // Every structure starts built. The player defends it: moats, outer walls, repairs.
 (function (root) {
@@ -11,7 +11,7 @@
       hint: 'Dig near the water. Wet sand holds, dry sand crumbles.',
       prep: 18, gap: 12,
       waves: [{ s: 1.8 }, { s: 2.2 }],
-      structs: [{ name: 'Tower', type: 'tower', x: 9, y: 19, w: 2, h: 2, req: 2 }],
+      structs: [{ name: 'Tower', type: 'tower', x: 7, y: 19, w: 2, h: 2, req: 2 }],
     },
     {
       name: 'Sea Wall',
@@ -19,7 +19,7 @@
       hint: 'Hold on a cell to pile sand higher.',
       prep: 18, gap: 12,
       waves: [{ s: 2.0 }, { s: 2.4 }, { s: 2.8 }],
-      structs: [{ name: 'Wall', type: 'wall', x: 6, y: 19, w: 8, h: 1, req: 2 }],
+      structs: [{ name: 'Wall', type: 'wall', x: 4, y: 19, w: 8, h: 1, req: 2 }],
     },
     {
       name: 'Dig a Moat',
@@ -27,7 +27,7 @@
       hint: 'Dig below the beach to make a moat.',
       prep: 22, gap: 12,
       waves: [{ s: 2.5 }, { s: 3.0 }, { s: 3.5 }],
-      structs: [{ name: 'Tower', type: 'tower', x: 9, y: 18, w: 2, h: 2, req: 3 }],
+      structs: [{ name: 'Tower', type: 'tower', x: 7, y: 18, w: 2, h: 2, req: 3 }],
     },
     {
       name: 'Twin Towers',
@@ -36,8 +36,8 @@
       prep: 22, gap: 12,
       waves: [{ s: 2.6 }, { s: 3.0 }, { s: 3.4 }],
       structs: [
-        { name: 'West Tower', type: 'tower', x: 5, y: 18, w: 2, h: 2, req: 3 },
-        { name: 'East Tower', type: 'tower', x: 13, y: 18, w: 2, h: 2, req: 3 },
+        { name: 'West Tower', type: 'tower', x: 4, y: 18, w: 2, h: 2, req: 3 },
+        { name: 'East Tower', type: 'tower', x: 10, y: 18, w: 2, h: 2, req: 3 },
       ],
     },
     {
@@ -45,9 +45,9 @@
       desc: 'Rocks funnel the whole sea through one gap, straight at your keep. Redirect it.',
       hint: 'Water follows the lowest path. Give it one.',
       prep: 24, gap: 13,
-      rocks: [{ x: 0, y: 21, w: 8, h: 2 }, { x: 12, y: 21, w: 8, h: 2 }],
-      waves: [{ s: 3.0, focus: 9.5, width: 3 }, { s: 3.5, focus: 9.5, width: 3 }, { s: 4.0, focus: 9.5, width: 3 }, { s: 4.0, focus: 9.5, width: 3 }],
-      structs: [{ name: 'Keep', type: 'keep', x: 8, y: 16, w: 3, h: 2, req: 2 }],
+      rocks: [{ x: 0, y: 21, w: 6, h: 2 }, { x: 10, y: 21, w: 6, h: 2 }],
+      waves: [{ s: 3.0, focus: 7.5, width: 2.5 }, { s: 3.5, focus: 7.5, width: 2.5 }, { s: 4.0, focus: 7.5, width: 2.5 }, { s: 4.0, focus: 7.5, width: 2.5 }],
+      structs: [{ name: 'Keep', type: 'keep', x: 7, y: 16, w: 3, h: 2, req: 2 }],
     },
     {
       name: 'Sandbar',
@@ -56,8 +56,8 @@
       prep: 22, gap: 12,
       waves: [{ s: 4.0 }, { s: 2.0 }, { s: 4.5 }, { s: 2.5 }],
       structs: [
-        { name: 'Outer Wall', type: 'wall', x: 7, y: 20, w: 6, h: 1, req: 2 },
-        { name: 'Tower', type: 'tower', x: 9, y: 16, w: 2, h: 2, req: 3 },
+        { name: 'Outer Wall', type: 'wall', x: 5, y: 20, w: 6, h: 1, req: 2 },
+        { name: 'Tower', type: 'tower', x: 7, y: 16, w: 2, h: 2, req: 3 },
       ],
     },
     {
@@ -67,7 +67,7 @@
       prep: 22, gap: 14,
       sim: { allWet: true, dryRate: 0.035, slope: 0.9 },
       waves: [{ s: 2.5 }, { s: 3.0 }, { s: 3.5 }, { s: 4.0 }],
-      structs: [{ name: 'Keep', type: 'keep', x: 8, y: 17, w: 3, h: 3, req: 2 }],
+      structs: [{ name: 'Keep', type: 'keep', x: 7, y: 17, w: 3, h: 3, req: 2 }],
     },
     {
       name: 'The Castle',
@@ -76,9 +76,9 @@
       prep: 28, gap: 14,
       waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }],
       structs: [
-        { name: 'Keep', type: 'keep', x: 8, y: 17, w: 3, h: 3, req: 2 },
-        { name: 'West Tower', type: 'tower', x: 5, y: 17, w: 2, h: 2, req: 3 },
-        { name: 'East Tower', type: 'tower', x: 13, y: 17, w: 2, h: 2, req: 3 },
+        { name: 'Keep', type: 'keep', x: 7, y: 17, w: 3, h: 3, req: 2 },
+        { name: 'West Tower', type: 'tower', x: 3, y: 17, w: 2, h: 2, req: 3 },
+        { name: 'East Tower', type: 'tower', x: 12, y: 17, w: 2, h: 2, req: 3 },
       ],
     },
     {
@@ -87,16 +87,16 @@
       hint: 'Ripples show where the surge will land.',
       prep: 26, gap: 14,
       waves: [
-        { s: 4.0, focus: 4, width: 4 },
-        { s: 4.0, focus: 15, width: 4 },
-        { s: 5.0, focus: 9.5, width: 5 },
-        { s: 5.5, focus: 4, width: 6 },
-        { s: 5.5, focus: 15, width: 6 },
+        { s: 4.0, focus: 3, width: 3 },
+        { s: 4.0, focus: 12, width: 3 },
+        { s: 5.0, focus: 7.5, width: 4 },
+        { s: 5.5, focus: 3, width: 5 },
+        { s: 5.5, focus: 12, width: 5 },
       ],
       structs: [
-        { name: 'Tower', type: 'tower', x: 9, y: 17, w: 2, h: 2, req: 3 },
-        { name: 'West Wall', type: 'wall', x: 2, y: 19, w: 5, h: 1, req: 2 },
-        { name: 'East Wall', type: 'wall', x: 13, y: 19, w: 5, h: 1, req: 2 },
+        { name: 'Tower', type: 'tower', x: 7, y: 17, w: 2, h: 2, req: 3 },
+        { name: 'West Wall', type: 'wall', x: 1, y: 19, w: 4, h: 1, req: 2 },
+        { name: 'East Wall', type: 'wall', x: 11, y: 19, w: 4, h: 1, req: 2 },
       ],
     },
     {
@@ -106,19 +106,18 @@
       prep: 34, gap: 15,
       waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }, { s: 6.0 }],
       structs: [
-        { name: 'Keep', type: 'keep', x: 8, y: 16, w: 3, h: 3, req: 2 },
-        { name: 'NW Tower', type: 'tower', x: 4, y: 16, w: 2, h: 2, req: 3 },
-        { name: 'NE Tower', type: 'tower', x: 14, y: 16, w: 2, h: 2, req: 3 },
-        { name: 'SW Tower', type: 'tower', x: 4, y: 20, w: 2, h: 2, req: 3 },
-        { name: 'SE Tower', type: 'tower', x: 14, y: 20, w: 2, h: 2, req: 3 },
-        { name: 'Front Wall', type: 'wall', x: 7, y: 21, w: 6, h: 1, req: 2 },
+        { name: 'Keep', type: 'keep', x: 7, y: 16, w: 3, h: 3, req: 2 },
+        { name: 'NW Tower', type: 'tower', x: 3, y: 16, w: 2, h: 2, req: 3 },
+        { name: 'NE Tower', type: 'tower', x: 12, y: 16, w: 2, h: 2, req: 3 },
+        { name: 'SW Tower', type: 'tower', x: 3, y: 20, w: 2, h: 2, req: 3 },
+        { name: 'SE Tower', type: 'tower', x: 12, y: 20, w: 2, h: 2, req: 3 },
+        { name: 'Front Wall', type: 'wall', x: 5, y: 21, w: 6, h: 1, req: 2 },
       ],
     },
   ];
 
   // Opposing Tides: the sea runs through the middle, a castle on each shore.
-  // Player 0 (host) holds the bottom shore, player 1 the top. The wet zone on
-  // both sides is shared sand: digging your moat lowers the bar for both.
+  // Player 0 (host) holds the bottom shore, player 1 the top.
   const VERSUS_LEVEL = {
     name: 'Opposing Tides',
     versus: true,
@@ -128,16 +127,32 @@
     sim: { oceanRows: [13, 14], slope: 0.65 },
     waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }],
     structs: [
-      { name: 'Keep', type: 'keep', owner: 0, x: 8, y: 22, w: 3, h: 3, req: 2 },
-      { name: 'West Tower', type: 'tower', owner: 0, x: 4, y: 21, w: 2, h: 2, req: 3 },
-      { name: 'East Tower', type: 'tower', owner: 0, x: 14, y: 21, w: 2, h: 2, req: 3 },
-      { name: 'Keep', type: 'keep', owner: 1, x: 8, y: 3, w: 3, h: 3, req: 2 },
-      { name: 'West Tower', type: 'tower', owner: 1, x: 4, y: 5, w: 2, h: 2, req: 3 },
-      { name: 'East Tower', type: 'tower', owner: 1, x: 14, y: 5, w: 2, h: 2, req: 3 },
+      { name: 'Keep', type: 'keep', owner: 0, x: 7, y: 22, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 0, x: 3, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 0, x: 12, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'Keep', type: 'keep', owner: 1, x: 7, y: 3, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 1, x: 3, y: 5, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 1, x: 12, y: 5, w: 2, h: 2, req: 3 },
     ],
   };
 
-  const api = { LEVELS, VERSUS_LEVEL };
+  // Endless Tide: the castle layout, waves that never stop and keep growing.
+  // Waves are generated from the match seed, so ghosts replay exactly.
+  const ENDLESS_LEVEL = {
+    name: 'Endless Tide',
+    endless: true,
+    desc: 'The tide never goes out. Every wave is bigger than the last, and the sea starts aiming. Hold as long as you can.',
+    hint: 'Repair fast. Overbuild early, while the waves are small.',
+    prep: 24, gap: 12,
+    waves: [],
+    structs: [
+      { name: 'Keep', type: 'keep', x: 7, y: 17, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', x: 3, y: 17, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', x: 12, y: 17, w: 2, h: 2, req: 3 },
+    ],
+  };
+
+  const api = { LEVELS, VERSUS_LEVEL, ENDLESS_LEVEL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tidewright = Object.assign(root.Tidewright || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);

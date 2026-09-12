@@ -1,5 +1,5 @@
 // Tidewright - game shell: match engine, rendering, input, modes, networking UI.
-// Depends on sim.js, levels.js, net.js.
+// Depends on sim.js, levels.js, net.js, audio.js.
 //
 // Everything runs on a fixed 60 Hz tick and every player action is logged as
 // [tick, code, x, y, player]. A match replayed from its log is identical, which
@@ -7,18 +7,17 @@
 (function () {
   'use strict';
   const TW = window.Tidewright;
-  const { Sim, LEVELS, VERSUS_LEVEL, pack, unpack, encodeActions, decodeActions, Peer } = TW;
+  const { Sim, LEVELS, VERSUS_LEVEL, ENDLESS_LEVEL, mulberry32, pack, unpack, encodeActions, decodeActions, Peer } = TW;
   const SFX = TW.SFX || { play() {}, setWash() {}, setMuted() {}, isMuted() { return false; }, unlock() {} };
 
-  const COLS = 20, ROWS = 28;
-  const BUCKET_CAP = 10;
+  const COLS = 16, ROWS = 28;
   const TICK = 1 / 60;
   const SETTLE_TICKS = 210;
-  const HOLD_TICKS = 13;
   const NET_DELAY = 12;        // ticks of input delay in live play (200 ms)
   const NET_BATCH_MS = 100;
+  const DRAG_GAP = 30;         // ticks of silence that end a drag group (for undo)
   const SITE = 'https://zin34.github.io/tidewright/';
-  const A_DIG = 0, A_PLACE = 1, A_WAVE = 2;
+  const A_DIG = 0, A_PLACE = 1, A_WAVE = 2, A_UNDO = 3;
 
   const $ = id => document.getElementById(id);
   const canvas = $('beach');
@@ -29,6 +28,8 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
   let unlocked = Math.max(0, Math.min(LEVELS.length - 1, parseInt(lsGet('tw_unlocked', '0'), 10) || 0));
   let playerName = lsGet('tw_name', '');
+  let shells = Math.max(0, parseInt(lsGet('tw_shells', '0'), 10) || 0);
+  let upgrades = JSON.parse(lsGet('tw_upg', '{}'));
 
   function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   function dailyKey() { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; }
@@ -42,14 +43,54 @@
   }
   function prettyKey(k) { return `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`; }
 
+  // ---------- upgrades ----------
+  // Permanent, bought with shells. Applied to solo and endless play; live and
+  // daily matches use the base values so everyone plays the same beach.
+  const UPGRADES = [
+    { id: 'bucket', name: 'Bigger bucket', desc: '+2 sand per level', max: 3, cost: 30 },
+    { id: 'hands', name: 'Quick hands', desc: 'Holding a cell piles sand faster', max: 3, cost: 25 },
+    { id: 'packed', name: 'Packed sand', desc: 'Your sand erodes 15% slower per level', max: 3, cost: 40 },
+    { id: 'head', name: 'Head start', desc: '+2 sand in the bucket at the start', max: 3, cost: 20 },
+    { id: 'deep', name: 'Deep scoop', desc: 'Each dig takes more sand', max: 2, cost: 35 },
+    { id: 'prep', name: 'Long tide', desc: '+4 seconds before the first wave', max: 3, cost: 25 },
+  ];
+  const NO_UPGRADES = {};
+  function upLevel(u, id) { return Math.max(0, Math.min(4, (u && u[id]) | 0)); }
+  function upCost(id) { const d = UPGRADES.find(x => x.id === id); return d.cost * (upLevel(upgrades, id) + 1); }
+  function derived(u) {
+    return {
+      cap: 10 + 2 * upLevel(u, 'bucket'),
+      holdTicks: Math.max(7, 13 - 2 * upLevel(u, 'hands')),
+      ero: 1 - 0.15 * upLevel(u, 'packed'),
+      start: 4 + 2 * upLevel(u, 'head'),
+      scoop: 1 + 0.25 * upLevel(u, 'deep'),
+      prep: 4 * upLevel(u, 'prep'),
+    };
+  }
+
   // ---------- match engine ----------
-  function createMatch(L, seed, players) {
-    const sim = new Sim(COLS, ROWS, Object.assign({ seed }, L.sim || {}));
+  function waveCount(m) { return m.L.endless ? Infinity : m.L.waves.length; }
+  function waveAt(m, i) {
+    if (!m.L.endless) return m.L.waves[i];
+    while (m.waveCache.length <= i) {
+      const n = m.waveCache.length;
+      const r1 = m.waveRng(), r2 = m.waveRng(), r3 = m.waveRng();
+      const s = Math.min(7.5, 2.4 + 0.3 * n + (n >= 8 ? 0.1 * (n - 8) : 0));
+      const spec = { s };
+      if (n >= 2 && r1 < 0.45) { spec.focus = 1.5 + r2 * (COLS - 3); spec.width = 2.5 + r3 * 2.5; }
+      m.waveCache.push(spec);
+    }
+    return m.waveCache[i];
+  }
+  function createMatch(L, seed, players, u) {
+    const d = derived(u || NO_UPGRADES);
+    const simOpts = Object.assign({ seed }, L.sim || {});
+    const sim = new Sim(COLS, ROWS, simOpts);
+    sim.eroRate *= d.ero;
     (L.rocks || []).forEach(r => {
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) sim.setRock(x, y);
     });
     const structs = L.structs.map(s => Object.assign({}, s));
-    // The castle starts built and packed wet, with headroom above the required height.
     structs.forEach(s => {
       for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
         if (!sim.inBounds(x, y)) continue;
@@ -60,24 +101,48 @@
       }
     });
     const buckets = [];
-    for (let p = 0; p < players; p++) buckets.push({ sand: 4, moist: 1 });
+    for (let p = 0; p < players; p++) buckets.push({ sand: Math.min(d.cap, d.start), moist: 1 });
     return {
-      L, seed, sim, structs, players, buckets,
+      L, seed, sim, structs, players, buckets, d,
       h0: Float32Array.from(sim.h),
-      tick: 0, phase: 'build', waveIndex: 0, timer: Math.round(L.prep * 60),
+      tick: 0, phase: 'build', waveIndex: 0, timer: Math.round((L.prep + d.prep) * 60),
       log: [], result: null, sandMoved: 0, wavesSurvived: 0, lastAct: [], shake: 0,
+      drag: [], undoUsed: [],
+      waveRng: mulberry32((seed ^ 0x5bd1e995) | 0), waveCache: [],
     };
   }
 
+  function touchCell(m, p, x, y) {
+    // start or extend this player's drag group, remembering cell state for undo
+    let g = m.drag[p];
+    if (!g || m.tick - g.lastTick > DRAG_GAP || g.waveIndex !== m.waveIndex) {
+      const b = m.buckets[p];
+      g = m.drag[p] = { cells: new Map(), bucket: { sand: b.sand, moist: b.moist }, sandMoved: m.sandMoved, waveIndex: m.waveIndex, lastTick: m.tick };
+    }
+    g.lastTick = m.tick;
+    const i = m.sim.idx(x, y);
+    if (!g.cells.has(i)) g.cells.set(i, { h: m.sim.h[i], m: m.sim.m[i] });
+  }
   function applyAction(m, a) {
     if (m.result) return;
     const c = a[1], x = a[2], y = a[3], p = a[4] || 0;
     const b = m.buckets[p] || m.buckets[0];
     if (c === A_WAVE) { callWave(m); return; }
-    if (!m.sim.inBounds(x, y)) return;
+    if (c === A_UNDO) {
+      const g = m.drag[p];
+      if (!g || m.phase !== 'build' || m.undoUsed[p] === m.waveIndex) return;
+      g.cells.forEach((st, i) => { m.sim.h[i] = st.h; m.sim.m[i] = st.m; });
+      b.sand = g.bucket.sand; b.moist = g.bucket.moist;
+      m.sandMoved = g.sandMoved;
+      m.undoUsed[p] = m.waveIndex;
+      m.drag[p] = null;
+      return;
+    }
+    if (!m.sim.inBounds(x, y) || m.sim.isOcean(y)) return;
     if (c === A_DIG) {
-      if (b.sand >= BUCKET_CAP - 0.01) return;
-      const r = m.sim.dig(x, y, Math.min(1, BUCKET_CAP - b.sand));
+      if (b.sand >= m.d.cap - 0.01) return;
+      touchCell(m, p, x, y);
+      const r = m.sim.dig(x, y, Math.min(m.d.scoop, m.d.cap - b.sand));
       if (r.amount > 0) {
         const tot = b.sand + r.amount;
         b.moist = (b.moist * b.sand + r.moist * r.amount) / tot;
@@ -86,6 +151,7 @@
       }
     } else if (c === A_PLACE) {
       if (b.sand < 0.05) return;
+      touchCell(m, p, x, y);
       const placed = m.sim.place(x, y, Math.min(1, b.sand), b.moist);
       b.sand = Math.max(0, b.sand - placed);
     }
@@ -94,7 +160,6 @@
 
   function endMatch(m, r) { m.result = r; m.phase = 'over'; m.wavesSurvived = m.waveIndex; return true; }
 
-  // Returns true when the match ended.
   function checkStructures(m, when) {
     const down = m.structs.filter(s => !m.sim.standing(s).standing);
     if (m.L.versus) {
@@ -111,7 +176,7 @@
   function callWave(m) {
     if (m.phase !== 'build' || m.result) return;
     if (checkStructures(m, `when wave ${m.waveIndex + 1} came in`)) return;
-    m.sim.startWave(m.L.waves[m.waveIndex]);
+    m.sim.startWave(waveAt(m, m.waveIndex));
     m.phase = 'wave';
     m.shake = 30;
   }
@@ -136,7 +201,7 @@
         m.timer--;
         if (m.timer <= 0) {
           m.waveIndex++;
-          if (m.waveIndex < m.L.waves.length) { m.phase = 'build'; m.timer = Math.round(m.L.gap * 60); }
+          if (m.waveIndex < waveCount(m)) { m.phase = 'build'; m.timer = Math.round(m.L.gap * 60); }
           else finalCheck(m);
         }
       }
@@ -148,18 +213,22 @@
 
   function score(m) {
     const survived = m.result ? m.wavesSurvived : m.waveIndex;
-    return Math.max(0, Math.floor(1000 * (survived / m.L.waves.length) * m.sim.sandFraction(m.structs)) - Math.floor(m.sandMoved));
+    if (m.L.endless) return survived * 100 + Math.floor(m.sim.sandFraction(m.structs) * 99);
+    return Math.max(0, Math.floor(1000 * (survived / waveCount(m)) * m.sim.sandFraction(m.structs)) - Math.floor(m.sandMoved));
   }
+  // How far up the beach the given wave reaches on an open beach (rows from the sea).
+  function reachRows(s) { return Math.max(1, Math.round(5.3 + 3.9 * Math.log(Math.max(0.5, s)))); }
 
   // ---------- game state ----------
   const G = {
-    mode: 'solo',        // solo | daily | ghost | coop | versus
+    mode: 'solo',        // solo | daily | ghost | endless | coop | versus
     match: null, ghost: null, ghostMeta: null,
     running: false, levelIndex: 0, me: 0,
     tool: 'dig', acc: 0,
-    queue: new Map(),    // tick -> local actions
+    queue: new Map(),
     net: null, outbox: [], remote: { acts: new Map(), upto: -1 }, csLocal: new Map(),
     waiting: false, desync: false, peerName: '',
+    tut: null,
   };
 
   function scheduleLocal(c, x, y) {
@@ -174,7 +243,6 @@
     if (c === A_DIG) SFX.play('dig'); else if (c === A_PLACE) SFX.play('build');
   }
 
-  // One fixed step of everything. Returns false when waiting on the network.
   function doTick() {
     const m = G.match;
     const t = m.tick;
@@ -189,6 +257,7 @@
     const prevPhase = m.phase;
     if (!m.standingPrev) m.standingPrev = m.structs.map(s => m.sim.standing(s).standing);
     all.forEach(a => { if (a[1] === A_WAVE && G.net && a[4] !== G.me) SFX.play('horn'); applyAction(m, a); m.log.push(a); });
+    if (G.tut && G.tut.step < 3 && m.phase === 'build') m.timer = Math.max(m.timer, 900);   // tutorial holds the tide
     matchTick(m);
     if (prevPhase !== 'wave' && m.phase === 'wave') SFX.play('surge');
     if (m.phase === 'build' && m.timer === 180) SFX.play('warn');
@@ -202,13 +271,14 @@
       while (g.ai < g.acts.length && g.acts[g.ai][0] <= g.tick) { applyAction(g, g.acts[g.ai]); g.ai++; }
       matchTick(g);
     }
-    if (ptr.down) { ptr.hold++; if (ptr.hold >= HOLD_TICKS) { ptr.hold = 0; actAt(ptr.cx, ptr.cy); } }
+    if (ptr.down) { ptr.hold++; if (ptr.hold >= m.d.holdTicks) { ptr.hold = 0; actAt(ptr.cx, ptr.cy); } }
     if (G.net && m.tick % 120 === 0) {
       const v = m.sim.checksum();
       G.csLocal.set(m.tick, v);
       G.net.send({ k: 'cs', t: m.tick, v });
       if (G.csLocal.size > 20) G.csLocal.delete(G.csLocal.keys().next().value);
     }
+    if (G.tut) tutorialTick();
     if (m.result && !G.resultShown) onMatchOver();
     return true;
   }
@@ -218,15 +288,17 @@
     G.queue = new Map(); G.outbox = []; G.remote = { acts: new Map(), upto: -1 }; G.csLocal = new Map();
     G.waiting = false; G.desync = false;
   }
-  function beginMatch(L, seed, players, mode) {
+  function beginMatch(L, seed, players, mode, u) {
     G.mode = mode;
-    G.match = createMatch(L, seed, players);
+    G.match = createMatch(L, seed, players, u);
     G.ghost = null;
+    G.tut = null;
     G.resultShown = false;
     G.running = false;
     G.acc = 0;
     resetNetState();
     setTool('dig');
+    $('tut').hidden = true;
     $('hud-level').textContent = L.name;
     updateHud();
   }
@@ -234,32 +306,68 @@
     $('intro-title').textContent = L.daily ? `Daily Beach · ${prettyKey(L.daily)}` : (G.levelIndex >= 0 && !L.versus ? `${G.levelIndex + 1}. ${L.name}` : L.name);
     $('intro-desc').textContent = L.desc;
     $('intro-hint').textContent = extra || L.hint;
-    $('intro-waves').textContent = `${L.waves.length} wave${L.waves.length > 1 ? 's' : ''}`;
+    $('intro-waves').textContent = L.endless ? 'Waves without end' : `${L.waves.length} wave${L.waves.length > 1 ? 's' : ''}`;
     showOverlay('intro');
   }
   function newSeed() { return (Math.random() * 2147483647) | 0 || 1; }
 
   function startSolo(n) {
     G.levelIndex = n;
-    beginMatch(LEVELS[n], newSeed(), 1, 'solo');
-    showIntro(LEVELS[n]);
+    beginMatch(LEVELS[n], newSeed(), 1, 'solo', upgrades);
+    if (n === 0 && lsGet('tw_tut_done', '0') !== '1') {
+      G.tut = { step: 0, since: 0 };
+      G.match.buckets[0].sand = 0;   // the walkthrough starts with digging, so start empty
+    }
+    showIntro(LEVELS[n], G.tut ? 'A short walkthrough will guide your first tide.' : null);
+  }
+  function startEndless() {
+    G.levelIndex = -1;
+    beginMatch(ENDLESS_LEVEL, newSeed(), 1, 'endless', upgrades);
+    showIntro(ENDLESS_LEVEL, `Best so far: ${lsGet('tw_endless_best', '0')} waves. ${ENDLESS_LEVEL.hint}`);
   }
   function startDaily() {
     const key = dailyKey();
     G.levelIndex = -1;
-    G.dailyKeyPlaying = key;
-    beginMatch(dailyLevel(key), parseInt(key, 10), 1, 'daily');
+    beginMatch(dailyLevel(key), parseInt(key, 10), 1, 'daily', NO_UPGRADES);
     showIntro(G.match.L);
   }
   function startGhost(meta) {
     G.ghostMeta = meta;
-    const L = meta.d ? dailyLevel(meta.d) : LEVELS[meta.l];
-    G.levelIndex = meta.d ? -1 : meta.l;
-    beginMatch(L, meta.s, 1, meta.d && meta.d === dailyKey() ? 'daily' : 'ghost');
-    G.ghost = createMatch(L, meta.s, 1);
+    const L = meta.d ? dailyLevel(meta.d) : meta.e ? ENDLESS_LEVEL : LEVELS[meta.l];
+    G.levelIndex = meta.d || meta.e ? -1 : meta.l;
+    const mode = meta.d && meta.d === dailyKey() ? 'daily' : meta.e ? 'endless' : 'ghost';
+    beginMatch(L, meta.s, 1, mode, meta.d ? NO_UPGRADES : upgrades);
+    G.ghost = createMatch(L, meta.s, 1, meta.u || NO_UPGRADES);
     G.ghost.acts = decodeActions(meta.a);
     G.ghost.ai = 0;
-    showIntro(L, `Racing ${meta.n || 'a friend'}'s ghost (score ${meta.sc}). Their moves show as outlines.`);
+    showIntro(L, `Racing ${meta.n || 'a friend'}'s ghost (${meta.e ? meta.sc + ' waves' : 'score ' + meta.sc}). Their moves show as outlines.`);
+  }
+
+  // ---------- tutorial ----------
+  const TUT_STEPS = [
+    'Drag along the wet sand by the water to fill your bucket.',
+    'Tap Build, then tap the tower to pile sand on it.',
+    'Now press Wave to bring the tide in early, and watch.',
+    'Between waves, top the tower back up. Wet sand holds, dry sand crumbles.',
+  ];
+  function tutorialTick() {
+    const m = G.match, t = G.tut;
+    const banner = $('tut');
+    banner.hidden = false;
+    banner.textContent = TUT_STEPS[t.step];
+    $('btn-build').classList.toggle('pulse', t.step === 1 && G.tool !== 'build');
+    $('btn-call').classList.toggle('pulse', t.step === 2);
+    if (t.step === 0 && m.buckets[0].sand >= 3) t.step = 1;
+    else if (t.step === 1 && m.log.some(a => a[1] === A_PLACE)) t.step = 2;
+    else if (t.step === 2 && m.phase !== 'build') { t.step = 3; t.since = m.tick; }
+    else if (t.step === 3 && m.tick - t.since > 420) { finishTutorial(); }
+  }
+  function finishTutorial() {
+    G.tut = null;
+    lsSet('tw_tut_done', '1');
+    $('tut').hidden = true;
+    $('btn-build').classList.remove('pulse');
+    $('btn-call').classList.remove('pulse');
   }
 
   // ---------- overlays / menu ----------
@@ -270,7 +378,8 @@
   function goMenu() {
     stopNet();
     G.running = false;
-    G.match = null; G.ghost = null;
+    G.match = null; G.ghost = null; G.tut = null;
+    $('tut').hidden = true;
     $('hud-level').textContent = 'Tidewright';
     buildMenu();
     showOverlay('menu');
@@ -286,6 +395,8 @@
       b.addEventListener('click', () => startSolo(i));
       grid.appendChild(b);
     });
+    $('endless-sub').textContent = `Best ${lsGet('tw_endless_best', '0')} waves`;
+    $('shells-menu').textContent = `${shells} shells`;
     const key = dailyKey();
     const best = JSON.parse(lsGet('tw_daily_best_' + key, 'null'));
     $('daily-sub').textContent = best ? `${prettyKey(key)} · your best ${best.sc}` : `${prettyKey(key)} · not played yet`;
@@ -297,29 +408,45 @@
     sel.value = String(Math.min(7, unlocked));
   }
 
+  function earnShells(n, why) {
+    if (n <= 0) return '';
+    shells += n;
+    lsSet('tw_shells', String(shells));
+    return ` +${n} shells${why ? ' ' + why : ''}.`;
+  }
   function onMatchOver() {
     G.resultShown = true;
     const m = G.match, r = m.result;
     SFX.setWash(0);
     SFX.play(r.type === 'won' || (r.type === 'win' && r.winner === G.me) ? 'won' : r.type === 'draw' ? 'warn' : 'lost');
+    if (G.tut) finishTutorial();
     let title, msg = r.msg, canShare = false, canNext = false;
     if (G.mode === 'versus') {
       title = r.type === 'draw' ? 'A draw' : (r.winner === G.me ? 'Your castle stands' : 'Your castle fell');
     } else if (G.mode === 'coop') {
       title = r.type === 'won' ? 'It held' : 'Washed out';
+    } else if (G.mode === 'endless') {
+      title = `${m.wavesSurvived} wave${m.wavesSurvived === 1 ? '' : 's'} held`;
+      canShare = true;
+      const best = parseInt(lsGet('tw_endless_best', '0'), 10) || 0;
+      if (m.wavesSurvived > best) { lsSet('tw_endless_best', String(m.wavesSurvived)); msg += ' A new best.'; }
+      if (G.ghost && G.ghostMeta) msg += ` ${G.ghostMeta.n || 'The ghost'} held ${G.ghostMeta.sc}.`;
+      msg += earnShells(3 * m.wavesSurvived);
     } else {
       title = r.type === 'won' ? 'It held' : 'Washed out';
       canShare = true;
       const sc = score(m);
       msg += ` Score ${sc}.`;
       if (G.ghost && G.ghostMeta) msg += ` ${G.ghostMeta.n || 'The ghost'} scored ${G.ghostMeta.sc}. ${sc > G.ghostMeta.sc ? 'You beat them.' : sc === G.ghostMeta.sc ? 'A tie.' : 'They win this one.'}`;
-      if (G.mode === 'solo') {
+      if (G.mode === 'solo' || G.mode === 'ghost') {
         if (r.type === 'won') {
-          if (G.levelIndex >= unlocked && G.levelIndex + 1 < LEVELS.length) { unlocked = G.levelIndex + 1; lsSet('tw_unlocked', String(unlocked)); }
-          canNext = G.levelIndex + 1 < LEVELS.length;
-        }
+          if (G.mode === 'solo' && G.levelIndex >= unlocked && G.levelIndex + 1 < LEVELS.length) { unlocked = G.levelIndex + 1; lsSet('tw_unlocked', String(unlocked)); }
+          canNext = G.mode === 'solo' && G.levelIndex + 1 < LEVELS.length;
+          msg += earnShells(15 + 5 * waveCount(m));
+        } else msg += earnShells(3 * m.wavesSurvived);
       } else if (G.mode === 'daily' || (G.ghostMeta && G.ghostMeta.d === dailyKey())) {
         recordDaily(dailyKey(), { n: playerName || 'You', sc, mine: true });
+        msg += earnShells(Math.floor(sc / 40));
       }
     }
     $('result-title').textContent = title;
@@ -329,6 +456,35 @@
     $('btn-retry').hidden = G.mode === 'coop' || G.mode === 'versus';
     $('share-status').textContent = '';
     showOverlay('result');
+  }
+
+  // ---------- shop ----------
+  function showShop() {
+    $('shop-shells').textContent = `${shells} shells`;
+    const list = $('shop-list');
+    list.innerHTML = '';
+    UPGRADES.forEach(u => {
+      const lvl = upLevel(upgrades, u.id);
+      const row = document.createElement('div');
+      row.className = 'srow';
+      const full = lvl >= u.max;
+      const cost = upCost(u.id);
+      row.innerHTML = `<div class="sinfo"><b>${u.name}</b><small>${u.desc}</small><small class="lvl-dots">${'●'.repeat(lvl)}${'○'.repeat(u.max - lvl)}</small></div>`;
+      const b = document.createElement('button');
+      b.className = 'mini';
+      b.textContent = full ? 'Maxed' : `${cost} shells`;
+      b.disabled = full || shells < cost;
+      b.addEventListener('click', () => {
+        if (shells < cost || full) return;
+        shells -= cost; lsSet('tw_shells', String(shells));
+        upgrades[u.id] = lvl + 1; lsSet('tw_upg', JSON.stringify(upgrades));
+        SFX.play('repair');
+        showShop();
+      });
+      row.appendChild(b);
+      list.appendChild(row);
+    });
+    showOverlay('shop');
   }
 
   // ---------- daily board ----------
@@ -379,18 +535,21 @@
     if (statusEl) statusEl.textContent = full;
   }
   async function buildGhostLink(m) {
-    const meta = { v: 1, n: playerName || 'A friend', s: m.seed, sc: score(m), r: m.result ? m.result.type : 'x', a: encodeActions(m.log) };
-    if (m.L.daily) meta.d = m.L.daily; else meta.l = G.levelIndex;
+    const meta = { v: 2, c: COLS, n: playerName || 'A friend', s: m.seed, sc: m.L.endless ? m.wavesSurvived : score(m), r: m.result ? m.result.type : 'x', a: encodeActions(m.log) };
+    if (m.L.daily) meta.d = m.L.daily; else if (m.L.endless) meta.e = 1; else meta.l = G.levelIndex;
+    const u = {}; UPGRADES.forEach(x => { const l = upLevel(m.L.daily ? NO_UPGRADES : upgrades, x.id); if (l) u[x.id] = l; });
+    if (Object.keys(u).length) meta.u = u;
     return SITE + '#g=' + await pack(JSON.stringify(meta));
   }
   async function openGhostCode(code) {
     let meta;
     try { meta = JSON.parse(await unpack(code)); } catch (e) { alert('That link could not be read.'); return; }
-    if (!meta || meta.v !== 1 || typeof meta.a !== 'string') { alert('That link could not be read.'); return; }
+    if (!meta || typeof meta.a !== 'string') { alert('That link could not be read.'); return; }
+    if (meta.v !== 2 || meta.c !== COLS) { alert('That ghost was recorded on an older beach layout and cannot be replayed here.'); return; }
     if (meta.d && meta.d === dailyKey()) recordDaily(meta.d, { n: meta.n || 'A friend', sc: meta.sc, code });
     if (meta.l != null && (meta.l < 0 || meta.l >= LEVELS.length)) { alert('That ghost is from a level this version does not have.'); return; }
-    const L = meta.d ? dailyLevel(meta.d) : LEVELS[meta.l];
-    $('ghost-title').textContent = `${meta.n || 'A friend'} scored ${meta.sc}`;
+    const L = meta.d ? dailyLevel(meta.d) : meta.e ? ENDLESS_LEVEL : LEVELS[meta.l];
+    $('ghost-title').textContent = meta.e ? `${meta.n || 'A friend'} held ${meta.sc} waves` : `${meta.n || 'A friend'} scored ${meta.sc}`;
     $('ghost-msg').textContent = `On ${meta.d ? 'the Daily Beach for ' + prettyKey(meta.d) : L.name}. Race their ghost on the same beach with the same waves.`;
     $('btn-ghost-race').onclick = () => startGhost(meta);
     showOverlay('ghost');
@@ -412,7 +571,6 @@
     }, NET_BATCH_MS);
   }
   function onNetMessage(msg) {
-    const m = G.match;
     if (msg.k === 'in') {
       (msg.a || []).forEach(a => { let list = G.remote.acts.get(a[0]); if (!list) G.remote.acts.set(a[0], list = []); list.push(a); });
       if (msg.upto > G.remote.upto) G.remote.upto = msg.upto;
@@ -420,12 +578,11 @@
       const mine = G.csLocal.get(msg.t);
       if (mine != null && mine !== msg.v) G.desync = true;
     } else if (msg.k === 'hello') {
-      // guest receives the match setup from the host
       G.peerName = msg.n || 'Host';
       G.me = 1;
       const L = msg.mode === 'versus' ? VERSUS_LEVEL : LEVELS[msg.level];
       G.levelIndex = msg.mode === 'versus' ? -1 : msg.level;
-      beginMatch(L, msg.seed, 2, msg.mode);
+      beginMatch(L, msg.seed, 2, msg.mode, NO_UPGRADES);
       G.net.send({ k: 'ready', n: playerName || 'Guest' });
       $('join-status').textContent = `Connected to ${G.peerName}. Starting…`;
     } else if (msg.k === 'ready') {
@@ -439,7 +596,7 @@
   function liveStart() {
     showOverlay(null);
     G.running = true;
-    G.remote.upto = NET_DELAY - 1;   // the first delay window has no remote inputs by construction
+    G.remote.upto = NET_DELAY - 1;
     startNetLoop();
     $('hud-level').textContent = `${G.match.L.name} · with ${G.peerName}`;
   }
@@ -456,15 +613,13 @@
     const m = /[zp][A-Za-z0-9_-]{24,}/.exec(text || '');
     return m ? m[0] : null;
   }
-
-  // ----- shared pieces -----
   function prepareHostMatch(mode) {
     G.me = 0;
     const level = parseInt($('coop-level').value, 10) || 0;
     const seed = newSeed();
     const L = mode === 'versus' ? VERSUS_LEVEL : LEVELS[level];
     G.levelIndex = mode === 'versus' ? -1 : level;
-    beginMatch(L, seed, 2, mode);
+    beginMatch(L, seed, 2, mode, NO_UPGRADES);
     return { L, level, seed };
   }
   function hostTitle(mode, L) { return mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`; }
@@ -474,10 +629,8 @@
     link.onClose = onNetClosed;
   }
   function sendHello(mode, info) { G.net.send({ k: 'hello', mode, level: info.level, seed: info.seed, n: playerName || 'Host' }); }
-  // One pool for everyone: whoever waits first sets the mode (co-op or versus).
   function lobbyCode(mode, k) { return `lobby-${k}`; }
 
-  // ----- rooms: 4-digit codes and quick match through the public service -----
   async function hostWithCode(mode) {
     if (!TW.roomsAvailable()) { hostManual(mode); return; }
     stopNet();
@@ -489,7 +642,7 @@
     showOverlay('host');
     try {
       const room = await TW.hostRoomAny(link => {
-        if (G.net) return;   // one friend per room
+        if (G.net) return;
         attachLink(link);
         $('host-status').textContent = 'Your friend is connecting…';
         const hello = () => { $('host-status').textContent = 'Friend connected. Starting…'; sendHello(mode, info); };
@@ -502,7 +655,7 @@
       $('host-status').textContent = 'The room service could not be reached. Try again, or use a manual invite from the menu.';
     }
   }
-  async function joinWithCode(code, mode) {
+  async function joinWithCode(code) {
     if (!/^\d{4}$/.test(code)) { $('live-status').textContent = 'Room codes are four digits.'; return; }
     if (!TW.roomsAvailable()) { $('live-status').textContent = 'Room codes need the online service, which is not reachable here. Use a manual invite link.'; return; }
     stopNet();
@@ -512,12 +665,12 @@
     $('join-status').textContent = `Looking for room ${code}…`;
     showOverlay('join');
     try {
-      const link = await TW.joinRoom(code);
+      const link = await TW.joinRoom(code, 15000, () => { $('join-status').textContent = 'Found the room. Connecting the two phones…'; });
       if (G.quickCancel) { link.close(); return; }
       attachLink(link);
       $('join-status').textContent = 'Connected. Waiting for the host to start…';
     } catch (e) {
-      if (!G.quickCancel) $('join-status').textContent = `No room ${code} is open right now. Check the code with your host.`;
+      if (!G.quickCancel) $('join-status').textContent = `No room ${code} is open right now, or the phones could not connect. Check the code with your host.`;
     }
   }
   async function quickMatch(mode) {
@@ -528,8 +681,6 @@
     $('join-manual').hidden = true;
     $('join-status').textContent = 'Looking for anyone waiting…';
     showOverlay('join');
-    // Slots are tried in a fixed order so two players arriving together collide
-    // on the same slot: the second one fails to claim it and joins it instead.
     const slots = 6;
     let sawSomeone = false;
     const tryJoin = async (k, ms) => {
@@ -549,7 +700,6 @@
       catch (e) { if (sawSomeone && !G.quickCancel) $('join-status').textContent = 'Found someone but the phones could not connect directly. Still looking…'; }
     }
     if (G.quickCancel) return;
-    // nobody waiting: claim the lowest free slot and wait there
     const info = prepareHostMatch(mode);
     let mySlot = -1;
     for (let k = 0; k < slots && mySlot < 0; k++) {
@@ -564,15 +714,11 @@
         G.room = room;
         mySlot = k;
       } catch (e) {
-        // someone claimed this slot a moment ago: they are the one we want
         if (e && e.type === 'unavailable-id') { try { if (await tryJoin(k, 12000)) return; } catch (e2) { /* keep looking */ } }
       }
     }
     if (mySlot < 0) { $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.'; return; }
     $('join-status').textContent = 'Nobody is waiting right now, so you are first in line. The game starts when the next player looks for a match.';
-    // Keep checking the slots below ours while we wait, in case another player
-    // is waiting there too. Only the higher slot reaches down, so exactly one
-    // side of any pair initiates.
     const myRoom = G.room;
     while (!G.quickCancel && G.room === myRoom && !G.net) {
       for (let j = 0; j < mySlot && !G.net && !G.quickCancel && G.room === myRoom; j++) {
@@ -581,8 +727,6 @@
       await new Promise(r => setTimeout(r, 1500));
     }
   }
-
-  // ----- manual invite: no service, link and reply codes -----
   async function hostManual(mode) {
     if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
     stopNet();
@@ -617,12 +761,8 @@
   async function hostConnect() {
     const code = extractCode($('host-reply').value);
     if (!code) { $('host-status').textContent = 'Paste the whole reply your friend sent.'; return; }
-    try {
-      $('host-status').textContent = 'Connecting…';
-      await G.net.acceptAnswer(code);
-    } catch (e) {
-      $('host-status').textContent = 'That reply did not work: ' + (e.message || e);
-    }
+    try { $('host-status').textContent = 'Connecting…'; await G.net.acceptAnswer(code); }
+    catch (e) { $('host-status').textContent = 'That reply did not work: ' + (e.message || e); }
   }
   async function joinGame(code, mode) {
     if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
@@ -664,35 +804,36 @@
     const url = /#(.*)$/.exec(text || '');
     if (url) { const p = new URLSearchParams(url[1]); if (p.get('g')) return openGhostCode(p.get('g')); if (p.get('j')) return joinGame(p.get('j'), p.get('m') || 'c'); }
     if (!code) { $('paste-status').textContent = 'No Tidewright link or code found in that.'; return; }
-    // a bare code: try it as a ghost first, then as an invite
-    try { const meta = JSON.parse(await unpack(code)); if (meta && meta.v === 1) return openGhostCode(code); if (meta && meta.t === 'o') return joinGame(code, 'c'); } catch (e) { /* fall through */ }
+    try { const meta = JSON.parse(await unpack(code)); if (meta && meta.a) return openGhostCode(code); if (meta && meta.t === 'o') return joinGame(code, 'c'); } catch (e) { /* fall through */ }
     $('paste-status').textContent = 'That code could not be read.';
   }
 
   // ---------- HUD ----------
   const hudWave = $('hud-wave'), hudTimer = $('hud-timer'), hudBar = $('hud-bar'), hudStatus = $('hud-status');
   const bucketFill = $('bucket-fill'), bucketNum = $('bucket-num');
-  const btnCall = $('btn-call');
+  const btnCall = $('btn-call'), btnUndo = $('btn-undo');
   function updateHud() {
     const m = G.match;
     if (!m) return;
-    const L = m.L, total = L.waves.length;
+    const L = m.L, total = waveCount(m);
+    const waveLabel = L.endless ? `Wave ${m.waveIndex + 1}` : `Wave ${m.waveIndex + 1} of ${total}`;
     if (m.result) {
       hudWave.textContent = m.result.type === 'won' ? 'Tide out' : 'Over';
       hudTimer.textContent = ''; hudBar.style.width = '0%'; btnCall.disabled = true;
     } else if (m.phase === 'build') {
-      hudWave.textContent = `Wave ${m.waveIndex + 1} of ${total}`;
-      hudTimer.textContent = G.waiting ? 'waiting…' : `${Math.ceil(m.timer / 60)}s`;
-      const span = (m.waveIndex === 0 ? L.prep : L.gap) * 60;
+      hudWave.textContent = waveLabel;
+      hudTimer.textContent = G.waiting ? 'waiting…' : (G.tut && G.tut.step < 3 ? 'tide held' : `${Math.ceil(m.timer / 60)}s`);
+      const span = (m.waveIndex === 0 ? L.prep + m.d.prep : L.gap) * 60;
       hudBar.style.width = `${Math.max(0, 100 * (1 - m.timer / span))}%`;
       hudBar.className = 'bar' + (m.timer < 240 ? ' urgent' : '');
       btnCall.disabled = !G.running;
     } else {
-      hudWave.textContent = `Wave ${m.waveIndex + 1} of ${total}`;
+      hudWave.textContent = waveLabel;
       hudTimer.textContent = G.waiting ? 'waiting…' : (m.phase === 'wave' ? 'surge' : 'settling');
       hudBar.style.width = '100%'; hudBar.className = 'bar surge';
       btnCall.disabled = true;
     }
+    btnUndo.disabled = !(G.running && !m.result && m.phase === 'build' && m.drag[G.me] && m.undoUsed[G.me] !== m.waveIndex);
     if (L.versus) {
       const mine = m.structs.filter(s => s.owner === G.me), theirs = m.structs.filter(s => s.owner !== G.me);
       const up = a => a.filter(s => m.sim.standing(s).standing).length;
@@ -708,7 +849,7 @@
     }
     if (G.desync) hudStatus.textContent += ' · out of sync';
     const b = m.buckets[G.me] || m.buckets[0];
-    bucketFill.style.height = `${(b.sand / BUCKET_CAP) * 100}%`;
+    bucketFill.style.height = `${(b.sand / m.d.cap) * 100}%`;
     bucketFill.style.background = b.moist > 0.6 ? '#a8865a' : b.moist > 0.3 ? '#cdb182' : '#e9d7a8';
     bucketNum.textContent = `${Math.floor(b.sand)}`;
   }
@@ -750,13 +891,13 @@
   $('btn-dig').addEventListener('click', () => setTool('dig'));
   $('btn-build').addEventListener('click', () => setTool('build'));
   btnCall.addEventListener('click', () => { if (G.match && G.running && G.match.phase === 'build') scheduleLocal(A_WAVE, 0, 0); });
+  btnUndo.addEventListener('click', () => { if (!btnUndo.disabled) { scheduleLocal(A_UNDO, 0, 0); SFX.play('crumble'); } });
   $('btn-restart').addEventListener('click', () => retry());
   $('btn-menu').addEventListener('click', goMenu);
   const btnMute = $('btn-mute');
   const paintMute = () => { btnMute.textContent = SFX.isMuted() ? '\u{1F507}' : '\u{1F50A}'; btnMute.title = SFX.isMuted() ? 'Sound off' : 'Sound on'; };
   btnMute.addEventListener('click', () => { SFX.unlock(); SFX.setMuted(!SFX.isMuted()); paintMute(); });
   paintMute();
-  // browsers only start audio inside a user gesture
   const unlockAudio = () => { SFX.unlock(); };
   document.addEventListener('pointerdown', unlockAudio, { passive: true });
   document.addEventListener('keydown', unlockAudio);
@@ -767,12 +908,16 @@
   $('btn-share').addEventListener('click', async () => {
     const m = G.match; if (!m) return;
     const link = await buildGhostLink(m);
-    const sc = score(m);
+    const sc = m.L.endless ? m.wavesSurvived : score(m);
     if (m.L.daily) recordDaily(m.L.daily, { n: playerName || 'You', sc, mine: true, code: link.split('#g=')[1] });
-    shareText('Tidewright', `I scored ${sc} on ${m.L.daily ? 'today’s Daily Beach' : m.L.name} in Tidewright. Race my ghost:`, link, $('share-status'));
+    const what = m.L.daily ? 'today’s Daily Beach' : m.L.name;
+    shareText('Tidewright', m.L.endless ? `I held ${sc} waves on ${what} in Tidewright. Race my ghost:` : `I scored ${sc} on ${what} in Tidewright. Race my ghost:`, link, $('share-status'));
   });
-  $('btn-reset').addEventListener('click', () => { unlocked = 0; lsSet('tw_unlocked', '0'); buildMenu(); });
+  $('btn-reset').addEventListener('click', () => { unlocked = 0; lsSet('tw_unlocked', '0'); lsSet('tw_tut_done', '0'); buildMenu(); });
   $('name-input').addEventListener('change', e => { playerName = e.target.value.trim().slice(0, 16); lsSet('tw_name', playerName); });
+  $('btn-endless').addEventListener('click', startEndless);
+  $('btn-shop').addEventListener('click', showShop);
+  $('btn-shop-menu').addEventListener('click', goMenu);
   $('btn-daily').addEventListener('click', startDaily);
   $('btn-board').addEventListener('click', showBoard);
   $('btn-board-play').addEventListener('click', startDaily);
@@ -788,8 +933,8 @@
   paintLiveMode();
   $('btn-host-code').addEventListener('click', () => hostWithCode(G.liveMode));
   $('btn-quick').addEventListener('click', () => quickMatch(G.liveMode));
-  $('btn-join-code').addEventListener('click', () => joinWithCode($('code-input').value.trim(), G.liveMode));
-  $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinWithCode($('code-input').value.trim(), G.liveMode); });
+  $('btn-join-code').addEventListener('click', () => joinWithCode($('code-input').value.trim()));
+  $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinWithCode($('code-input').value.trim()); });
   $('btn-host-manual').addEventListener('click', () => hostManual(G.liveMode));
   $('btn-paste').addEventListener('click', async () => {
     let text = $('paste-input').value;
@@ -804,11 +949,13 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'd' || e.key === 'D') setTool('dig');
     if (e.key === 'b' || e.key === 'B') setTool('build');
+    if ((e.key === 'z' || e.key === 'Z') && !btnUndo.disabled) scheduleLocal(A_UNDO, 0, 0);
     if (e.key === ' ' && G.match && G.running && G.match.phase === 'build') { e.preventDefault(); scheduleLocal(A_WAVE, 0, 0); }
   });
   function retry() {
     if (G.mode === 'solo') startSolo(G.levelIndex);
-    else if (G.mode === 'ghost' || (G.ghostMeta && G.ghost)) startGhost(G.ghostMeta);
+    else if (G.ghostMeta && G.ghost) startGhost(G.ghostMeta);
+    else if (G.mode === 'endless') startEndless();
     else if (G.mode === 'daily') startDaily();
     else goMenu();
   }
@@ -850,7 +997,6 @@
     return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
   }
 
-  // castle art
   const INK = 'rgba(70,45,15,0.75)';
   let flagColor = '#e5484d';
   function merlon(x, y, w, h) {
@@ -890,7 +1036,6 @@
     const mw = cell * 0.3, step = cell * 0.5;
     for (let x = px + 2; x <= px + pw - mw - 2; x += step) { merlon(x, py + 2, mw, mw); merlon(x, py + ph - mw - 2, mw, mw); }
     for (let y = py + 2 + step; y <= py + ph - mw - 2 - step; y += step) { merlon(px + 2, y, mw, mw); merlon(px + pw - mw - 2, y, mw, mw); }
-    // gate on the seaward face
     const gw = cell * 0.5, gh = cell * 0.55, gx = px + pw / 2;
     ctx.fillStyle = 'rgba(40,25,10,0.85)';
     ctx.beginPath();
@@ -970,10 +1115,8 @@
     }
   }
 
-  // one shoreline: edgeY is the sea band's edge in pixels, dir -1 when the
-  // beach is above the band (crest rises up), +1 when it is below
   function drawShore(sim, edgeY, dir, now) {
-    const up = dir < 0 ? 1 : -1;   // pixel direction toward the beach
+    const up = dir < 0 ? 1 : -1;
     if (sim.waveActive && sim.waveSpec) {
       const spec = sim.waveSpec;
       const env = sim.waveEnvelope();
@@ -1039,6 +1182,35 @@
     }
   }
 
+  // Faint line where the next wave will reach on open sand, drawn during prep.
+  function drawTideLine(m, edgeY, dir, now) {
+    if (m.phase !== 'build' || m.result) return;
+    const spec = waveAt(m, m.waveIndex);
+    const reach = reachRows(spec.s);
+    const up = dir < 0 ? 1 : -1;
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.lineDashOffset = -now * 12;
+    ctx.strokeStyle = 'rgba(30,110,200,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x <= COLS * cell; x += 4) {
+      const cx = x / cell - 0.5;
+      let fac = 1;
+      if (spec.focus != null) { const d = (cx - spec.focus) / (spec.width || 5); const d2 = d * d; fac = 0.15 + 0.85 / (1 + d2 * (1 + 0.5 * d2)); }
+      const yy = edgeY - up * reach * fac * cell + Math.sin(x * 0.3 + now * 2) * 1.5;
+      if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(30,110,200,0.75)';
+    ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.5))}px system-ui, sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = dir < 0 ? 'bottom' : 'top';
+    const lx = 4, ly = edgeY - up * reach * cell - up * 3;
+    ctx.fillText('next wave reaches here', lx, ly);
+    ctx.restore();
+  }
+
   function render(t) {
     layoutIfNeeded();
     const m = G.match;
@@ -1046,7 +1218,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#0b1b2b';
     ctx.fillRect(0, 0, W, H);
-    if (!m || cell < 4) return;   // nothing sensible to draw in a collapsed viewport
+    if (!m || cell < 4) return;
     const sim = m.sim;
     const now = t * 0.001;
 
@@ -1055,7 +1227,6 @@
     ctx.save();
     ctx.translate(ox + sx, oy + sy);
 
-    // sand and rocks
     for (let y = 0; y < ROWS; y++) {
       if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
@@ -1071,7 +1242,6 @@
         ctx.fillRect(px, py, cell, cell);
       }
     }
-    // cliff edges and top highlights
     const edge = Math.max(2, Math.floor(cell * 0.18));
     for (let y = 0; y < ROWS; y++) {
       if (sim.oceanRow[y]) continue;
@@ -1086,7 +1256,6 @@
         if (sim.h[i] >= 0.8) { ctx.fillStyle = 'rgba(255,250,230,0.35)'; ctx.fillRect(px, py, cell, Math.max(1, Math.floor(cell * 0.12))); }
       }
     }
-    // wet sheen
     for (let y = 0; y < ROWS; y++) {
       if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
@@ -1102,7 +1271,6 @@
         ctx.fillRect(x * cell - cell * 0.4, y * cell - cell * 0.4, cell * 1.8, cell * 1.8);
       }
     }
-    // water body
     const wet = i => sim.w[i] >= 0.012;
     for (let y = 0; y < ROWS; y++) {
       if (sim.oceanRow[y]) continue;
@@ -1116,7 +1284,6 @@
         ctx.fillRect(x * cell, y * cell, cell, cell);
       }
     }
-    // foam and crests
     const crestW = Math.max(1.5, cell * 0.16);
     ctx.lineCap = 'round';
     for (let y = 0; y < ROWS; y++) {
@@ -1161,7 +1328,6 @@
         }
       }
     }
-    // sea bands
     const bands = [];
     sim.oceanRows.forEach(y => { const b = bands[bands.length - 1]; if (b && b[1] === y - 1) b[1] = y; else bands.push([y, y]); });
     bands.forEach(([y0, y1]) => {
@@ -1182,10 +1348,9 @@
         }
         ctx.stroke();
       }
-      // ripples announcing the next wave
       if (m.phase === 'build' && !m.result) {
-        const spec = m.L.waves[m.waveIndex];
-        const span = (m.waveIndex === 0 ? m.L.prep : m.L.gap) * 60;
+        const spec = waveAt(m, m.waveIndex);
+        const span = (m.waveIndex === 0 ? m.L.prep + m.d.prep : m.L.gap) * 60;
         const intensity = Math.max(0, ((1 - m.timer / span) - 0.35) / 0.65);
         if (intensity > 0) {
           const fx = spec.focus != null ? (spec.focus + 0.5) * cell : COLS * cell / 2;
@@ -1204,9 +1369,8 @@
           }
         }
       }
-      if (y0 > 0) drawShore(sim, top, -1, now);
-      if (y1 < ROWS - 1) drawShore(sim, bot, 1, now);
-      // wet zone lines
+      if (y0 > 0) { drawShore(sim, top, -1, now); drawTideLine(m, top, -1, now); }
+      if (y1 < ROWS - 1) { drawShore(sim, bot, 1, now); drawTideLine(m, bot, 1, now); }
       ctx.strokeStyle = 'rgba(255,255,255,0.12)';
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -1216,7 +1380,6 @@
       ctx.setLineDash([]);
     });
 
-    // ghost overlay: where the ghost's sand differs from the starting beach
     if (G.ghost) {
       const g = G.ghost.sim;
       ctx.lineWidth = 1.5;
@@ -1240,13 +1403,26 @@
       }
     }
 
-    // castle
     ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.6))}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
     m.structs.forEach(s => drawStructure(m, s));
 
-    // rival's last touch in live play
+    // tutorial highlights
+    if (G.tut && G.tut.step < 3) {
+      const pulse = 0.45 + 0.35 * Math.sin(now * 5);
+      ctx.strokeStyle = `rgba(255,255,255,${pulse.toFixed(2)})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      if (G.tut.step === 0) {
+        const y0 = (ROWS - 1 - sim.wetRows) * cell;
+        ctx.strokeRect(2, y0 + 2, COLS * cell - 4, sim.wetRows * cell - 4);
+      } else if (G.tut.step === 1) {
+        m.structs.forEach(s => ctx.strokeRect(s.x * cell - 3, s.y * cell - 3, s.w * cell + 6, s.h * cell + 6));
+      }
+      ctx.setLineDash([]);
+    }
+
     if (G.net && m.players > 1) {
       const la = m.lastAct[1 - G.me];
       if (la && m.tick - la.t < 20) {
@@ -1254,7 +1430,6 @@
         ctx.strokeRect(la.x * cell + 1, la.y * cell + 1, cell - 2, cell - 2);
       }
     }
-    // cursor cell
     if (ptr.down && sim.inBounds(ptr.cx, ptr.cy) && !sim.isOcean(ptr.cy)) {
       ctx.strokeStyle = G.tool === 'dig' ? 'rgba(20,20,20,0.7)' : 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 2;
@@ -1290,8 +1465,7 @@
     requestAnimationFrame(frame);
   }
 
-  // Debug handle for headless play-testing: window.__tw.run(seconds) advances ticks.
-  window.__tw = { G, tick: doTick, run: secs => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) if (G.match && G.running) doTick(); updateHud(); render(performance.now()); }, LEVELS, VERSUS_LEVEL, startSolo, startDaily, startGhost, buildGhostLink, score, createMatch, applyAction, matchTick };
+  window.__tw = { G, tick: doTick, run: secs => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) if (G.match && G.running) doTick(); updateHud(); render(performance.now()); }, LEVELS, VERSUS_LEVEL, ENDLESS_LEVEL, startSolo, startDaily, startGhost, startEndless, buildGhostLink, score, createMatch, applyAction, matchTick, UPGRADES, get shells() { return shells; }, set shells(v) { shells = v; lsSet('tw_shells', String(v)); } };
 
   layout();
   buildMenu();

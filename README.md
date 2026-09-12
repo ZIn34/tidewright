@@ -15,6 +15,14 @@ Every level is a beach that floods on a timer. Your castle starts built. Dig moa
 
 Structures are checked when each wave arrives and again after the last one settles. A breached piece shows an amber outline with the height to rebuild it to. Overbuild for a buffer.
 
+During prep a dashed tide line shows how far the next wave will reach on open sand. The undo button (or `Z`) reverses your last drag, once per wave; it is an input like any other, so ghosts and live matches replay it. The first play of level one is a short guided walkthrough.
+
+## Endless Tide and upgrades
+
+**Endless Tide** never stops: every wave is bigger than the last, and from the third wave on the sea starts aiming at one side. Score is waves held, best is kept on your device, and the run can be shared as a ghost.
+
+**Shells** are earned by holding the tide: a level win pays 15 plus 5 per wave, a loss 3 per wave survived, Endless 3 per wave held, the Daily Beach by score. The **Upgrades** shop spends them on a bigger bucket, quicker hands, packed sand that erodes slower, a head start of sand, a deeper scoop, and a longer first tide. Upgrades apply to solo and Endless play only; Daily and live matches use the base castle so everyone plays the same beach. Ghost links carry the upgrades their run used.
+
 ## With friends
 
 Daily and ghost links need no server at all. Room codes and matchmaking use the free public PeerJS signaling service only to introduce the two phones; after that they talk directly. The manual invite link works with no service.
