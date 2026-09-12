@@ -474,7 +474,8 @@
     link.onClose = onNetClosed;
   }
   function sendHello(mode, info) { G.net.send({ k: 'hello', mode, level: info.level, seed: info.seed, n: playerName || 'Host' }); }
-  function lobbyCode(mode, k) { return `lobby-${mode}-${k}`; }
+  // One pool for everyone: whoever waits first sets the mode (co-op or versus).
+  function lobbyCode(mode, k) { return `lobby-${k}`; }
 
   // ----- rooms: 4-digit codes and quick match through the public service -----
   async function hostWithCode(mode) {
@@ -530,17 +531,22 @@
     // Slots are tried in a fixed order so two players arriving together collide
     // on the same slot: the second one fails to claim it and joins it instead.
     const slots = 6;
+    let sawSomeone = false;
     const tryJoin = async (k, ms) => {
-      const link = await TW.joinRoom(lobbyCode(mode, k), ms);
+      const link = await TW.joinRoom(lobbyCode(mode, k), ms, () => {
+        sawSomeone = true;
+        $('join-status').textContent = 'Found someone. Connecting the two phones…';
+      });
       if (G.quickCancel || G.net) { link.close(); return false; }
       if (G.room) { G.room.close(); G.room = null; }
       attachLink(link);
-      $('join-status').textContent = 'Found someone. Waiting for them to start…';
+      $('join-status').textContent = 'Connected. Waiting for them to start…';
       return true;
     };
     for (let k = 0; k < slots; k++) {
       if (G.quickCancel) return;
-      try { if (await tryJoin(k, 3000)) return; } catch (e) { /* slot empty */ }
+      try { if (await tryJoin(k, 12000)) return; }
+      catch (e) { if (sawSomeone && !G.quickCancel) $('join-status').textContent = 'Found someone but the phones could not connect directly. Still looking…'; }
     }
     if (G.quickCancel) return;
     // nobody waiting: claim the lowest free slot and wait there
@@ -559,7 +565,7 @@
         mySlot = k;
       } catch (e) {
         // someone claimed this slot a moment ago: they are the one we want
-        if (e && e.type === 'unavailable-id') { try { if (await tryJoin(k, 4000)) return; } catch (e2) { /* keep looking */ } }
+        if (e && e.type === 'unavailable-id') { try { if (await tryJoin(k, 12000)) return; } catch (e2) { /* keep looking */ } }
       }
     }
     if (mySlot < 0) { $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.'; return; }
@@ -570,7 +576,7 @@
     const myRoom = G.room;
     while (!G.quickCancel && G.room === myRoom && !G.net) {
       for (let j = 0; j < mySlot && !G.net && !G.quickCancel && G.room === myRoom; j++) {
-        try { if (await tryJoin(j, 2500)) return; } catch (e) { /* still empty */ }
+        try { if (await tryJoin(j, 10000)) return; } catch (e) { /* still empty */ }
       }
       await new Promise(r => setTimeout(r, 1500));
     }

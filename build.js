@@ -2,7 +2,13 @@
 const fs = require('fs');
 const path = require('path');
 const root = __dirname;
-let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+// Stamp a version onto the local script tags in index.html so phones that
+// cached an older script (GitHub Pages caches for 10 minutes) fetch the new one.
+const stamp = Date.now().toString(36);
+const indexPath = path.join(root, 'index.html');
+let html = fs.readFileSync(indexPath, 'utf8').replace(/<script src="([a-z]+\.js)(?:\?v=[a-z0-9]+)?"><\/script>/g, (m, f) => `<script src="${f}?v=${stamp}"></script>`);
+fs.writeFileSync(indexPath, html);
+html = html.replace(/<script src="([a-z]+\.js)\?v=[a-z0-9]+"><\/script>/g, '<script src="$1"></script>');
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
   if (/^https?:/.test(src)) return m;   // external libraries stay as links
   const code = fs.readFileSync(path.join(root, src), 'utf8').replace(/<\/script/gi, '<\\/script');

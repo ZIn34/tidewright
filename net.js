@@ -182,7 +182,7 @@
   function hostRoom(code, onLink, timeoutMs) {
     return new Promise((resolve, reject) => {
       const useCode = code || String(1000 + Math.floor(Math.random() * 9000));
-      const peer = new root.Peer(idFor(useCode), { debug: 0 });
+      const peer = new root.Peer(idFor(useCode), { debug: 0, config: { iceServers: ICE } });
       let settled = false;
       const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
       peer.on('open', () => { settled = true; resolve({ code: useCode, peer, close: () => { try { peer.destroy(); } catch (e) { /* ignore */ } } }); });
@@ -200,15 +200,20 @@
     throw last;
   }
   // Connect to a room by code. Resolves an open Link or rejects (no such room, no service).
-  function joinRoom(code, timeoutMs) {
+  // onFound fires when the room exists and the phones start negotiating a
+  // direct path, so a caller can tell "nobody there" from "found but blocked".
+  function joinRoom(code, timeoutMs, onFound) {
     return new Promise((resolve, reject) => {
-      const peer = new root.Peer({ debug: 0 });
+      const peer = new root.Peer({ debug: 0, config: { iceServers: ICE } });
       let settled = false;
       const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
       peer.on('open', () => {
         const conn = peer.connect(idFor(code), { reliable: true, serialization: 'json' });
         const link = new Link(conn, peer);
         conn.on('open', () => { if (settled) return; settled = true; resolve(link); });
+        if (onFound && conn.peerConnection) {
+          conn.peerConnection.addEventListener('signalingstatechange', () => { if (conn.peerConnection.signalingState === 'stable' && conn.peerConnection.remoteDescription) onFound(); }, { once: true });
+        }
       });
       peer.on('error', err => fail(err));
       setTimeout(() => fail(new Error('timeout')), timeoutMs || 9000);
