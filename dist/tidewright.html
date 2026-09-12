@@ -152,6 +152,8 @@
   @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(233,215,168,0.9); } 50% { box-shadow: 0 0 0 6px rgba(233,215,168,0); } }
   @media (prefers-reduced-motion: reduce) { .pulse { animation: none; outline: 2px solid var(--sand); } }
   #btn-undo { padding: 12px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-dim); margin: 2px 0 8px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--sea); }
   .pair .wide { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; }
   .pair .wide small { color: var(--ink-dim); font-weight: 400; font-size: 12px; }
   .srow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
@@ -213,6 +215,7 @@
 
     <h3 class="section">With friends</h3>
     <label class="field"><span>Your name on shared results</span><input id="name-input" type="text" maxlength="16" placeholder="Beachcomber" autocomplete="nickname"></label>
+    <label class="check"><input id="music-toggle" type="checkbox" checked> Theme music</label>
     <div class="friends">
       <button id="btn-daily" class="wide"><b>Daily Beach</b><small id="daily-sub"></small></button>
       <button id="btn-board" class="wide"><b>Today's board</b><small>Your best and friends' results you have opened</small></button>
@@ -1051,8 +1054,47 @@
   'use strict';
 
   let ac = null, master = null, noiseBuf = null, wash = null, ambient = null;
-  let muted = false;
-  try { muted = localStorage.getItem('tw_mute') === '1'; } catch (e) { /* ignore */ }
+  let muted = false, musicOn = true;
+  try { muted = localStorage.getItem('tw_mute') === '1'; musicOn = localStorage.getItem('tw_music') !== '0'; } catch (e) { /* ignore */ }
+
+  // ---------- theme music: a plain looping audio element ----------
+  // Served next to the page on the site; the standalone file and other hosts
+  // fetch it from the site so the single file stays small.
+  const MUSIC_BASE = 0.4;
+  const MUSIC_SRC = /localhost|127\.0\.0\.1|github\.io/.test(location.hostname) ? 'theme.mp3' : 'https://zin34.github.io/tidewright/theme.mp3';
+  let music = null, duckUntil = 0, duckTimer = null;
+  function ensureMusic() {
+    if (music) return music;
+    music = new Audio(MUSIC_SRC);
+    music.loop = true;
+    music.preload = 'auto';
+    music.volume = MUSIC_BASE;
+    music.muted = muted;
+    return music;
+  }
+  function startMusic() {
+    if (!musicOn) return;
+    const m = ensureMusic();
+    if (m.paused) m.play().catch(() => { /* not allowed yet; the next gesture retries */ });
+  }
+  // Lower the music for a moment so the surge can be heard, then ease back.
+  function duck(seconds) {
+    const m = ensureMusic();
+    duckUntil = Date.now() + seconds * 1000;
+    m.volume = MUSIC_BASE * 0.3;
+    if (duckTimer) clearInterval(duckTimer);
+    duckTimer = setInterval(() => {
+      if (Date.now() < duckUntil) return;
+      m.volume = Math.min(MUSIC_BASE, m.volume + 0.02);
+      if (m.volume >= MUSIC_BASE - 0.001) { clearInterval(duckTimer); duckTimer = null; }
+    }, 60);
+  }
+  function setMusic(on) {
+    musicOn = !!on;
+    try { localStorage.setItem('tw_music', musicOn ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (musicOn) startMusic(); else if (music) music.pause();
+  }
+  function isMusicOn() { return musicOn; }
 
   function ensure() {
     if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return true; }
@@ -1123,6 +1165,7 @@
     const t = ac.currentTime;
     switch (name) {
       case 'surge': {
+        duck(4);
         // rising rush that breaks into a crash
         const n = noise(false);
         const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
@@ -1159,11 +1202,12 @@
     muted = !!m;
     try { localStorage.setItem('tw_mute', muted ? '1' : '0'); } catch (e) { /* ignore */ }
     if (master) master.gain.setTargetAtTime(muted ? 0 : 1, ac.currentTime, 0.02);
+    if (music) music.muted = muted;
   }
   function isMuted() { return muted; }
-  function unlock() { ensure(); }
+  function unlock() { ensure(); startMusic(); }
 
-  root.Tidewright = Object.assign(root.Tidewright || {}, { SFX: { play, setWash, setMuted, isMuted, unlock } });
+  root.Tidewright = Object.assign(root.Tidewright || {}, { SFX: { play, setWash, setMuted, isMuted, unlock, setMusic, isMusicOn } });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -2085,6 +2129,8 @@
   });
   $('btn-reset').addEventListener('click', () => { unlocked = 0; lsSet('tw_unlocked', '0'); lsSet('tw_tut_done', '0'); buildMenu(); });
   $('name-input').addEventListener('change', e => { playerName = e.target.value.trim().slice(0, 16); lsSet('tw_name', playerName); });
+  $('music-toggle').checked = SFX.isMusicOn ? SFX.isMusicOn() : true;
+  $('music-toggle').addEventListener('change', e => { if (SFX.setMusic) SFX.setMusic(e.target.checked); });
   $('btn-endless').addEventListener('click', startEndless);
   $('btn-shop').addEventListener('click', showShop);
   $('btn-shop-menu').addEventListener('click', goMenu);

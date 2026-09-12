@@ -5,8 +5,47 @@
   'use strict';
 
   let ac = null, master = null, noiseBuf = null, wash = null, ambient = null;
-  let muted = false;
-  try { muted = localStorage.getItem('tw_mute') === '1'; } catch (e) { /* ignore */ }
+  let muted = false, musicOn = true;
+  try { muted = localStorage.getItem('tw_mute') === '1'; musicOn = localStorage.getItem('tw_music') !== '0'; } catch (e) { /* ignore */ }
+
+  // ---------- theme music: a plain looping audio element ----------
+  // Served next to the page on the site; the standalone file and other hosts
+  // fetch it from the site so the single file stays small.
+  const MUSIC_BASE = 0.4;
+  const MUSIC_SRC = /localhost|127\.0\.0\.1|github\.io/.test(location.hostname) ? 'theme.mp3' : 'https://zin34.github.io/tidewright/theme.mp3';
+  let music = null, duckUntil = 0, duckTimer = null;
+  function ensureMusic() {
+    if (music) return music;
+    music = new Audio(MUSIC_SRC);
+    music.loop = true;
+    music.preload = 'auto';
+    music.volume = MUSIC_BASE;
+    music.muted = muted;
+    return music;
+  }
+  function startMusic() {
+    if (!musicOn) return;
+    const m = ensureMusic();
+    if (m.paused) m.play().catch(() => { /* not allowed yet; the next gesture retries */ });
+  }
+  // Lower the music for a moment so the surge can be heard, then ease back.
+  function duck(seconds) {
+    const m = ensureMusic();
+    duckUntil = Date.now() + seconds * 1000;
+    m.volume = MUSIC_BASE * 0.3;
+    if (duckTimer) clearInterval(duckTimer);
+    duckTimer = setInterval(() => {
+      if (Date.now() < duckUntil) return;
+      m.volume = Math.min(MUSIC_BASE, m.volume + 0.02);
+      if (m.volume >= MUSIC_BASE - 0.001) { clearInterval(duckTimer); duckTimer = null; }
+    }, 60);
+  }
+  function setMusic(on) {
+    musicOn = !!on;
+    try { localStorage.setItem('tw_music', musicOn ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (musicOn) startMusic(); else if (music) music.pause();
+  }
+  function isMusicOn() { return musicOn; }
 
   function ensure() {
     if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return true; }
@@ -77,6 +116,7 @@
     const t = ac.currentTime;
     switch (name) {
       case 'surge': {
+        duck(4);
         // rising rush that breaks into a crash
         const n = noise(false);
         const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
@@ -113,9 +153,10 @@
     muted = !!m;
     try { localStorage.setItem('tw_mute', muted ? '1' : '0'); } catch (e) { /* ignore */ }
     if (master) master.gain.setTargetAtTime(muted ? 0 : 1, ac.currentTime, 0.02);
+    if (music) music.muted = muted;
   }
   function isMuted() { return muted; }
-  function unlock() { ensure(); }
+  function unlock() { ensure(); startMusic(); }
 
-  root.Tidewright = Object.assign(root.Tidewright || {}, { SFX: { play, setWash, setMuted, isMuted, unlock } });
+  root.Tidewright = Object.assign(root.Tidewright || {}, { SFX: { play, setWash, setMuted, isMuted, unlock, setMusic, isMusicOn } });
 })(typeof window !== 'undefined' ? window : globalThis);

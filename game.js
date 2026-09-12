@@ -915,6 +915,8 @@
   });
   $('btn-reset').addEventListener('click', () => { unlocked = 0; lsSet('tw_unlocked', '0'); lsSet('tw_tut_done', '0'); buildMenu(); });
   $('name-input').addEventListener('change', e => { playerName = e.target.value.trim().slice(0, 16); lsSet('tw_name', playerName); });
+  $('music-toggle').checked = SFX.isMusicOn ? SFX.isMusicOn() : true;
+  $('music-toggle').addEventListener('change', e => { if (SFX.setMusic) SFX.setMusic(e.target.checked); });
   $('btn-endless').addEventListener('click', startEndless);
   $('btn-shop').addEventListener('click', showShop);
   $('btn-shop-menu').addEventListener('click', goMenu);

@@ -7,7 +7,7 @@ const path = require('path');
 const dist = path.join(__dirname, 'dist');
 const outDir = process.argv[2] || __dirname;
 const port = parseInt(process.argv[3] || '8767', 10);
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.mp4': 'video/mp4' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.png': 'image/png', '.mp4': 'video/mp4', '.mp3': 'audio/mpeg' };
 
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');

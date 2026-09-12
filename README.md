@@ -33,6 +33,10 @@ Daily and ghost links need no server at all. Room codes and matchmaking use the 
 
 How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, no engine-specific math), so only inputs are ever shared. Live play is delay-based lockstep over a WebRTC data channel, and peers compare sand checksums every two seconds to flag a desync.
 
+## Sound
+
+`theme.mp3` loops as the theme at low volume and ducks under each surge; the Theme music box on the menu turns it off. Effects are synthesized in `audio.js`. The speaker button mutes everything.
+
 ## Project layout
 
 | File | Purpose |
@@ -45,6 +49,7 @@ How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, n
 | `build.js` | Inlines everything into `dist/tidewright.html` (artifact fragment) and `Tidewright.html` (standalone). |
 | `tune.js` | Headless harness: wave reach, wall erosion, moat effect, perf. |
 | `devserver.js` | Dev-only static server that also accepts frame uploads for headless render checks. |
+| `theme.mp3` | Theme music loop, fetched from the site by the standalone file. |
 
 ## Working on it
 
