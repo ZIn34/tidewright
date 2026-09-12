@@ -119,6 +119,29 @@
   .lg-wet { background: #a68658; }
   .lg-dry { background: #ecd8a8; }
   .lg-bp { border: 2px dashed var(--warn); box-sizing: border-box; background: rgba(240,180,41,0.15); }
+  #overlays { overflow-y: auto; align-items: flex-start; }
+  .overlay { margin: auto; }
+  .section { margin: 18px 0 8px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-dim); }
+  .field { display: block; margin: 8px 0; }
+  .field span { display: block; font-size: 12px; color: var(--ink-dim); margin-bottom: 4px; letter-spacing: 0.02em; }
+  .field input, .field textarea, .pastebox textarea, #coop-level {
+    width: 100%; box-sizing: border-box; border: 1px solid var(--panel-2); border-radius: 8px; background: var(--bg); color: var(--ink);
+    font: inherit; padding: 8px 10px; resize: none;
+  }
+  .field textarea[readonly] { color: var(--ink-dim); font-size: 12px; word-break: break-all; }
+  .friends { display: grid; gap: 8px; }
+  .friends .wide { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; }
+  .friends .wide small { color: var(--ink-dim); font-weight: 400; font-size: 12px; }
+  .friends .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+  #coop-level { width: auto; max-width: 140px; }
+  .pastebox { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
+  .pastebox button { border: 0; border-radius: 10px; font: inherit; font-weight: 700; background: var(--panel-2); color: var(--ink); padding: 0 14px; cursor: pointer; }
+  .board { display: grid; gap: 6px; margin: 10px 0 6px; }
+  .brow { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
+  .brow.mine { outline: 2px solid var(--sand); }
+  .brow .rank { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .brow .sc { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .brow .mini { border: 0; border-radius: 8px; background: var(--sea); color: var(--ink); font: inherit; font-weight: 700; padding: 6px 10px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -159,35 +182,95 @@
       <div class="sw lg-bp"></div><div>Breach: rebuild to the number shown</div>
     </div>
     <div id="level-grid"></div>
+
+    <h3 class="section">With friends</h3>
+    <label class="field"><span>Your name on shared results</span><input id="name-input" type="text" maxlength="16" placeholder="Beachcomber" autocomplete="nickname"></label>
+    <div class="friends">
+      <button id="btn-daily" class="wide"><b>Daily Beach</b><small id="daily-sub"></small></button>
+      <button id="btn-board" class="wide"><b>Today's board</b><small>Your best and friends' results you have opened</small></button>
+      <div class="pair">
+        <button id="btn-host-coop" class="wide"><b>Host co-op</b><small>Defend one castle together</small></button>
+        <select id="coop-level" aria-label="Co-op level"></select>
+      </div>
+      <button id="btn-host-versus" class="wide"><b>Host versus</b><small>Opposing Tides, a castle each</small></button>
+      <div class="pastebox">
+        <textarea id="paste-input" rows="2" placeholder="Paste an invite or a ghost link here"></textarea>
+        <button id="btn-paste">Open</button>
+      </div>
+      <p class="meta" id="paste-status"></p>
+      <p class="meta" id="net-note" hidden>This browser cannot make direct connections, so live modes are off. Daily and ghost links still work.</p>
+    </div>
     <div class="row"><button id="btn-reset" class="quiet">Reset progress</button></div>
   </div>
+
   <div class="overlay" data-name="intro" hidden>
     <h2 id="intro-title"></h2>
     <p id="intro-desc"></p>
     <p class="hint" id="intro-hint"></p>
     <p class="meta" id="intro-waves"></p>
-    <div class="row"><button id="btn-go" class="primary">Start building</button></div>
+    <div class="row"><button id="btn-go" class="primary">Defend</button></div>
   </div>
-  <div class="overlay" data-name="lost" hidden>
-    <h2>Washed out</h2>
-    <p id="lost-msg"></p>
+
+  <div class="overlay" data-name="result" hidden>
+    <h2 id="result-title"></h2>
+    <p id="result-msg"></p>
+    <p class="meta" id="share-status"></p>
     <div class="row">
-      <button id="btn-lost-menu" class="quiet">Levels</button>
-      <button id="btn-retry" class="primary">Try again</button>
-    </div>
-  </div>
-  <div class="overlay" data-name="won" hidden>
-    <h2>It held</h2>
-    <p id="won-msg"></p>
-    <div class="row">
-      <button id="btn-won-menu" class="quiet">Levels</button>
+      <button id="btn-share">Share ghost</button>
+      <button id="btn-retry">Try again</button>
       <button id="btn-next" class="primary">Next beach</button>
     </div>
+    <div class="row"><button id="btn-result-menu" class="quiet">Menu</button></div>
+  </div>
+
+  <div class="overlay" data-name="ghost" hidden>
+    <h2 id="ghost-title"></h2>
+    <p id="ghost-msg"></p>
+    <div class="row">
+      <button id="btn-ghost-cancel" class="quiet">Menu</button>
+      <button id="btn-ghost-race" class="primary">Race the ghost</button>
+    </div>
+  </div>
+
+  <div class="overlay" data-name="board" hidden>
+    <h2 id="board-title"></h2>
+    <div id="board-list" class="board"></div>
+    <div class="row">
+      <button id="btn-board-menu" class="quiet">Menu</button>
+      <button id="btn-board-play" class="primary">Play today's beach</button>
+    </div>
+  </div>
+
+  <div class="overlay" data-name="host" hidden>
+    <h2 id="host-title">Host</h2>
+    <p class="meta" id="host-status"></p>
+    <label class="field"><span>1. Your invite link</span><textarea id="host-link" rows="2" readonly></textarea></label>
+    <div class="row"><button id="btn-host-share" class="primary">Share invite</button></div>
+    <label class="field"><span>2. Your friend's reply</span><textarea id="host-reply" rows="3" placeholder="Paste the reply they send back"></textarea></label>
+    <div class="row">
+      <button id="btn-host-paste">Paste</button>
+      <button id="host-connect" class="primary">Connect</button>
+    </div>
+    <div class="row"><button id="btn-host-cancel" class="quiet">Cancel</button></div>
+  </div>
+
+  <div class="overlay" data-name="join" hidden>
+    <h2 id="join-title">Join</h2>
+    <p class="meta" id="join-status"></p>
+    <label class="field"><span>Your reply for the host</span><textarea id="join-reply" rows="3" readonly></textarea></label>
+    <div class="row"><button id="btn-join-share" class="primary">Send reply</button></div>
+    <div class="row"><button id="btn-join-cancel" class="quiet">Cancel</button></div>
   </div>
 </div>
 
 <script>
 // Tidewright - beach simulation core (no DOM). Works in browser and node.
+//
+// Determinism matters: the same level, seed and input sequence must produce
+// the identical beach on every device, because replays (ghosts) and live
+// multiplayer send only inputs. So the sim uses a fixed timestep, an integer
+// PRNG, and no transcendental Math functions (sin/exp can differ by an ulp
+// between JavaScript engines).
 (function (root) {
   'use strict';
 
@@ -228,20 +311,33 @@
       this.rand = mulberry32(opts.seed || 1);
       this.time = 0;
 
+      // Sea rows: the bottom row by default, or any rows (a mirrored beach
+      // puts the sea in the middle with a beach on each side).
+      this.oceanRows = (opts.oceanRows || [rows - 1]).slice();
+      this.oceanRow = new Uint8Array(rows);
+      this.oceanRows.forEach(y => { this.oceanRow[y] = 1; });
+      this.dist = new Int16Array(rows);  // rows to the nearest sea row
+      let maxDist = 1;
       for (let y = 0; y < rows; y++) {
+        let d = 1e9;
+        this.oceanRows.forEach(o => { d = Math.min(d, Math.abs(y - o)); });
+        this.dist[y] = d;
+        if (d > maxDist) maxDist = d;
+      }
+      this.maxDist = maxDist;
+
+      for (let y = 0; y < rows; y++) {
+        const d = this.dist[y];
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
-          const up = (rows - 1 - y) / (rows - 1); // 0 at ocean row, 1 at top
-          this.g[i] = this.slope * up;
+          if (this.oceanRow[y]) { this.g[i] = -0.6; this.m[i] = 1; continue; }
+          this.g[i] = this.slope * d / maxDist;
           // moisture gradient: wet near the water, dry up the beach
-          const distFromWet = y - (rows - 1 - this.wetRows);
-          if (distFromWet >= 0) this.m[i] = 1;
-          else this.m[i] = Math.max(0.12, 0.9 + distFromWet * 0.08);
+          if (d <= this.wetRows) this.m[i] = 1;
+          else this.m[i] = Math.max(0.12, 0.9 - (d - this.wetRows) * 0.08);
           if (opts.allWet) this.m[i] = 1;
         }
       }
-      // ocean row is a basin
-      for (let x = 0; x < cols; x++) this.g[(rows - 1) * cols + x] = -0.6;
 
       this.waveActive = false;
       this.waveT = 0;
@@ -251,7 +347,7 @@
 
     idx(x, y) { return y * this.cols + x; }
     inBounds(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
-    isOcean(y) { return y === this.rows - 1; }
+    isOcean(y) { return this.oceanRow[y] === 1; }
     surface(i) { return this.g[i] + this.h[i] + this.w[i]; }
 
     setRock(x, y) {
@@ -268,16 +364,25 @@
       for (let x = 0; x < this.cols; x++) this.waveNoise[x] = 0.85 + this.rand() * 0.3;
     }
 
-    // Wave injection profile for a column, 0..1 factor
+    // Wave injection profile for a column, 0..~1.15
     waveFactor(x) {
       const s = this.waveSpec;
       let f = this.waveNoise[x];
       if (s.focus != null) {
         const width = s.width || 5;
         const d = (x - s.focus) / width;
-        f *= 0.15 + 0.85 * Math.exp(-d * d);
+        const d2 = d * d;
+        f *= 0.15 + 0.85 / (1 + d2 * (1 + 0.5 * d2));   // bell curve without Math.exp
       }
       return f;
+    }
+
+    // Surge envelope 0..1 over the wave's duration (parabola, not Math.sin)
+    waveEnvelope() {
+      const s = this.waveSpec;
+      if (!s || !this.waveActive) return 0;
+      const u = Math.min(1, this.waveT / (s.duration || 1.6));
+      return 4 * u * (1 - u);
     }
 
     step(dt) {
@@ -285,34 +390,36 @@
       this.time += dt;
       this.flow.fill(0);
 
-      // Wave injection into the ocean row
+      // Wave injection into the sea rows
       if (this.waveActive) {
         const s = this.waveSpec;
         const dur = s.duration || 1.6;
-        const t = this.waveT;
-        const env = Math.sin(Math.PI * Math.min(1, t / dur));
-        const base = (rows - 1) * cols;
-        for (let x = 0; x < cols; x++) {
-          this.w[base + x] += s.s * env * this.waveFactor(x) * dt * 3.0;
+        const env = this.waveEnvelope();
+        for (const oy of this.oceanRows) {
+          const base = oy * cols;
+          for (let x = 0; x < cols; x++) this.w[base + x] += s.s * env * this.waveFactor(x) * dt * 3.0;
         }
         this.waveT += dt;
-        if (t >= dur) this.waveActive = false;
+        if (this.waveT >= dur + dt * 0.5) this.waveActive = false;
       }
 
       // Water flow
       const sub = 3;
       for (let k = 0; k < sub; k++) this.flowStep(dt / sub);
 
-      // Ocean row drains back to sea when not surging
+      // Sea rows drain back to sea when not surging
       if (!this.waveActive) {
-        const base = (rows - 1) * cols;
         const keep = Math.max(0, 1 - 5 * dt);
-        for (let x = 0; x < cols; x++) this.w[base + x] *= keep;
+        for (const oy of this.oceanRows) {
+          const base = oy * cols;
+          for (let x = 0; x < cols; x++) this.w[base + x] *= keep;
+        }
       }
 
       // Absorption, drying, erosion, slump
-      const wetStart = rows - 1 - this.wetRows;
-      for (let y = 0; y < rows - 1; y++) {
+      for (let y = 0; y < rows; y++) {
+        if (this.oceanRow[y]) continue;
+        const wetRow = this.dist[y] <= this.wetRows;
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           if (this.rock[i]) continue;
@@ -324,7 +431,7 @@
             this.w[i] = 0;
             this.m[i] = Math.max(0, this.m[i] - this.dryRate * dt);
           }
-          if (y >= wetStart) this.m[i] = Math.max(this.m[i], 0.85);
+          if (wetRow) this.m[i] = Math.max(this.m[i], 0.85);
 
           // Erosion of built sand by rushing / pressing water.
           // Only the part of a neighbour's water column that sits above this
@@ -401,7 +508,8 @@
     slump(dt) {
       const cols = this.cols, rows = this.rows;
       const p = Math.min(1, dt * 5);
-      for (let y = 0; y < rows - 1; y++) {
+      for (let y = 0; y < rows; y++) {
+        if (this.oceanRow[y]) continue;
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           if (this.rock[i]) continue;
@@ -409,7 +517,7 @@
           const si = this.g[i] + this.h[i];
           for (let d = 0; d < 4; d++) {
             const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
-            if (!this.inBounds(nx, ny) || ny === rows - 1) continue;
+            if (!this.inBounds(nx, ny) || this.oceanRow[ny]) continue;
             const j = ny * cols + nx;
             if (this.rock[j]) continue;
             const diff = si - (this.g[j] + this.h[j]);
@@ -426,7 +534,7 @@
       }
     }
 
-    // Player digs one unit; returns {amount, moist}
+    // Player digs; returns {amount, moist}
     dig(x, y, amount) {
       if (!this.inBounds(x, y) || this.isOcean(y)) return { amount: 0, moist: 0 };
       const i = this.idx(x, y);
@@ -463,6 +571,26 @@
         }
       }
       return { ok, total, standing: ok === total };
+    }
+
+    // Fraction of required sand still in place across a set of structures (0..1)
+    sandFraction(structs) {
+      let have = 0, need = 0;
+      structs.forEach(st => {
+        for (let y = st.y; y < st.y + st.h; y++) for (let x = st.x; x < st.x + st.w; x++) {
+          if (!this.inBounds(x, y)) continue;
+          need += st.req;
+          have += Math.max(0, Math.min(st.req, this.h[this.idx(x, y)]));
+        }
+      });
+      return need > 0 ? have / need : 1;
+    }
+
+    // Cheap fingerprint of the sand, for detecting desync between peers
+    checksum() {
+      let s = 0;
+      for (let i = 0; i < this.h.length; i++) s = (s + Math.round(this.h[i] * 64) * (i % 251 + 1)) | 0;
+      return s;
     }
   }
 
@@ -591,51 +719,850 @@
     },
   ];
 
-  const api = { LEVELS };
+  // Opposing Tides: the sea runs through the middle, a castle on each shore.
+  // Player 0 (host) holds the bottom shore, player 1 the top. The wet zone on
+  // both sides is shared sand: digging your moat lowers the bar for both.
+  const VERSUS_LEVEL = {
+    name: 'Opposing Tides',
+    versus: true,
+    desc: 'Two castles, one sea between them. Defend yours. Either player can call the next wave early.',
+    hint: 'Call the wave when you are ready and your rival is not.',
+    prep: 24, gap: 13,
+    sim: { oceanRows: [13, 14], slope: 0.65 },
+    waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }],
+    structs: [
+      { name: 'Keep', type: 'keep', owner: 0, x: 8, y: 22, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 0, x: 4, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 0, x: 14, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'Keep', type: 'keep', owner: 1, x: 8, y: 3, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 1, x: 4, y: 5, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 1, x: 14, y: 5, w: 2, h: 2, req: 3 },
+    ],
+  };
+
+  const api = { LEVELS, VERSUS_LEVEL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tidewright = Object.assign(root.Tidewright || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
 <script>
-// Tidewright - game shell: rendering, input, level flow. Depends on sim.js and levels.js.
+// Tidewright - serverless peer-to-peer link (WebRTC data channel) and codecs.
+//
+// There is no signaling server. The host makes an offer code, sends it to a
+// friend as a link; the friend's page answers with a reply code that the host
+// pastes back. After that the two phones talk directly. Codes are deflated
+// and base64url-encoded so they fit in a message.
+(function (root) {
+  'use strict';
+
+  // ---------- codec: string <-> compact url-safe code ----------
+  const te = new TextEncoder(), td = new TextDecoder();
+  function b64u(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64u(str) {
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    const s = atob(str);
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  async function pump(stream) {
+    const reader = stream.getReader();
+    const chunks = [];
+    let len = 0;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value); len += value.length;
+    }
+    const out = new Uint8Array(len);
+    let o = 0;
+    chunks.forEach(c => { out.set(c, o); o += c.length; });
+    return out;
+  }
+  const canZip = typeof CompressionStream !== 'undefined';
+  // Pack a string into a code. Prefix 'z' = deflated, 'p' = plain.
+  async function pack(str) {
+    const bytes = te.encode(str);
+    if (canZip) {
+      try {
+        const cs = new CompressionStream('deflate-raw');
+        const w = cs.writable.getWriter();
+        w.write(bytes); w.close();
+        return 'z' + b64u(await pump(cs.readable));
+      } catch (e) { /* fall through */ }
+    }
+    return 'p' + b64u(bytes);
+  }
+  async function unpack(code) {
+    if (!code || code.length < 2) throw new Error('empty code');
+    const kind = code[0], body = unb64u(code.slice(1));
+    if (kind === 'p') return td.decode(body);
+    if (kind === 'z') {
+      if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot read compressed codes.');
+      const ds = new DecompressionStream('deflate-raw');
+      const w = ds.writable.getWriter();
+      w.write(body); w.close();
+      return td.decode(await pump(ds.readable));
+    }
+    throw new Error('unknown code');
+  }
+
+  // ---------- action log <-> bytes ----------
+  // Actions are [tick, code, x, y, player]. Ticks are stored as deltas.
+  function encodeActions(actions) {
+    const out = [];
+    let last = 0;
+    const varint = v => { while (v >= 128) { out.push((v & 127) | 128); v >>>= 7; } out.push(v); };
+    actions.forEach(a => {
+      varint(a[0] - last); last = a[0];
+      out.push((a[1] & 15) | ((a[4] & 15) << 4));
+      out.push(a[2] & 255); out.push(a[3] & 255);
+    });
+    return b64u(Uint8Array.from(out));
+  }
+  function decodeActions(str) {
+    const b = unb64u(str);
+    const acts = [];
+    let i = 0, last = 0;
+    while (i < b.length) {
+      let v = 0, shift = 0;
+      for (;;) { const c = b[i++]; v |= (c & 127) << shift; if (c < 128) break; shift += 7; }
+      last += v;
+      const cp = b[i++], x = b[i++], y = b[i++];
+      acts.push([last, cp & 15, x, y, cp >> 4]);
+    }
+    return acts;
+  }
+
+  // ---------- peer link ----------
+  const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+
+  class Peer {
+    constructor() {
+      this.pc = new RTCPeerConnection({ iceServers: ICE });
+      this.channel = null;
+      this.onMessage = null;
+      this.onOpen = null;
+      this.onClose = null;
+      this.open = false;
+      this.pc.onconnectionstatechange = () => {
+        const s = this.pc.connectionState;
+        if ((s === 'failed' || s === 'disconnected' || s === 'closed') && this.open) { this.open = false; if (this.onClose) this.onClose(s); }
+      };
+    }
+    _wire(ch) {
+      this.channel = ch;
+      ch.onopen = () => { this.open = true; if (this.onOpen) this.onOpen(); };
+      ch.onclose = () => { if (this.open) { this.open = false; if (this.onClose) this.onClose('closed'); } };
+      ch.onmessage = e => { if (this.onMessage) { try { this.onMessage(JSON.parse(e.data)); } catch (err) { /* ignore junk */ } } };
+    }
+    // Wait until ICE gathering is done (or a timeout) so the code carries every candidate.
+    _gathered() {
+      return new Promise(resolve => {
+        if (this.pc.iceGatheringState === 'complete') return resolve();
+        const t = setTimeout(resolve, 4000);
+        this.pc.onicegatheringstatechange = () => {
+          if (this.pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+        };
+      });
+    }
+    async createOffer() {
+      this._wire(this.pc.createDataChannel('tw', { ordered: true }));
+      await this.pc.setLocalDescription(await this.pc.createOffer());
+      await this._gathered();
+      return pack(JSON.stringify({ t: 'o', s: this.pc.localDescription.sdp }));
+    }
+    async acceptOffer(code) {
+      const msg = JSON.parse(await unpack(code));
+      if (msg.t !== 'o') throw new Error('That is not an invite code.');
+      this.pc.ondatachannel = e => this._wire(e.channel);
+      await this.pc.setRemoteDescription({ type: 'offer', sdp: msg.s });
+      await this.pc.setLocalDescription(await this.pc.createAnswer());
+      await this._gathered();
+      return pack(JSON.stringify({ t: 'a', s: this.pc.localDescription.sdp }));
+    }
+    async acceptAnswer(code) {
+      const msg = JSON.parse(await unpack(code));
+      if (msg.t !== 'a') throw new Error('That is not a reply code.');
+      await this.pc.setRemoteDescription({ type: 'answer', sdp: msg.s });
+    }
+    send(obj) {
+      if (this.channel && this.channel.readyState === 'open') this.channel.send(JSON.stringify(obj));
+    }
+    close() {
+      try { if (this.channel) this.channel.close(); } catch (e) { /* ignore */ }
+      try { this.pc.close(); } catch (e) { /* ignore */ }
+      this.open = false;
+    }
+  }
+
+  const api = { pack, unpack, encodeActions, decodeActions, Peer, hasWebRTC: typeof RTCPeerConnection !== 'undefined' };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Tidewright = Object.assign(root.Tidewright || {}, api);
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+// Tidewright - game shell: match engine, rendering, input, modes, networking UI.
+// Depends on sim.js, levels.js, net.js.
+//
+// Everything runs on a fixed 60 Hz tick and every player action is logged as
+// [tick, code, x, y, player]. A match replayed from its log is identical, which
+// is what ghosts, daily scores and live multiplayer are built on.
 (function () {
   'use strict';
-  const { Sim, LEVELS } = window.Tidewright;
+  const TW = window.Tidewright;
+  const { Sim, LEVELS, VERSUS_LEVEL, pack, unpack, encodeActions, decodeActions, Peer } = TW;
 
   const COLS = 20, ROWS = 28;
   const BUCKET_CAP = 10;
-  const SETTLE = 3.5;
+  const TICK = 1 / 60;
+  const SETTLE_TICKS = 210;
+  const HOLD_TICKS = 13;
+  const NET_DELAY = 12;        // ticks of input delay in live play (200 ms)
+  const NET_BATCH_MS = 100;
+  const SITE = 'https://zin34.github.io/tidewright/';
+  const A_DIG = 0, A_PLACE = 1, A_WAVE = 2;
 
   const $ = id => document.getElementById(id);
   const canvas = $('beach');
   const ctx = canvas.getContext('2d');
 
-  // ---------- persistent progress ----------
-  function loadProgress() {
-    try { return Math.max(0, Math.min(LEVELS.length - 1, parseInt(localStorage.getItem('tw_unlocked') || '0', 10) || 0)); }
-    catch (e) { return 0; }
+  // ---------- persistence ----------
+  function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  let unlocked = Math.max(0, Math.min(LEVELS.length - 1, parseInt(lsGet('tw_unlocked', '0'), 10) || 0));
+  let playerName = lsGet('tw_name', '');
+
+  function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function dailyKey() { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; }
+  function dailyLevel(key) {
+    const tpl = LEVELS[2 + (hashStr('daily' + key) % 8)];
+    return Object.assign({}, tpl, {
+      name: 'Daily Beach', daily: key,
+      desc: `Today's beach is a ${tpl.name} layout. Everyone gets the same waves. Score is sand still standing, minus sand moved.`,
+      hint: tpl.hint,
+    });
   }
-  function saveProgress(n) {
-    try { localStorage.setItem('tw_unlocked', String(n)); } catch (e) { /* ignore */ }
+  function prettyKey(k) { return `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`; }
+
+  // ---------- match engine ----------
+  function createMatch(L, seed, players) {
+    const sim = new Sim(COLS, ROWS, Object.assign({ seed }, L.sim || {}));
+    (L.rocks || []).forEach(r => {
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) sim.setRock(x, y);
+    });
+    const structs = L.structs.map(s => Object.assign({}, s));
+    // The castle starts built and packed wet, with headroom above the required height.
+    structs.forEach(s => {
+      for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
+        if (!sim.inBounds(x, y)) continue;
+        const i = sim.idx(x, y);
+        if (sim.rock[i]) continue;
+        sim.h[i] = Math.min(sim.maxH, s.req + 0.4);
+        sim.m[i] = 1;
+      }
+    });
+    const buckets = [];
+    for (let p = 0; p < players; p++) buckets.push({ sand: 4, moist: 1 });
+    return {
+      L, seed, sim, structs, players, buckets,
+      h0: Float32Array.from(sim.h),
+      tick: 0, phase: 'build', waveIndex: 0, timer: Math.round(L.prep * 60),
+      log: [], result: null, sandMoved: 0, wavesSurvived: 0, lastAct: [], shake: 0,
+    };
   }
-  let unlocked = loadProgress();
+
+  function applyAction(m, a) {
+    if (m.result) return;
+    const c = a[1], x = a[2], y = a[3], p = a[4] || 0;
+    const b = m.buckets[p] || m.buckets[0];
+    if (c === A_WAVE) { callWave(m); return; }
+    if (!m.sim.inBounds(x, y)) return;
+    if (c === A_DIG) {
+      if (b.sand >= BUCKET_CAP - 0.01) return;
+      const r = m.sim.dig(x, y, Math.min(1, BUCKET_CAP - b.sand));
+      if (r.amount > 0) {
+        const tot = b.sand + r.amount;
+        b.moist = (b.moist * b.sand + r.moist * r.amount) / tot;
+        b.sand = tot;
+        m.sandMoved += r.amount;
+      }
+    } else if (c === A_PLACE) {
+      if (b.sand < 0.05) return;
+      const placed = m.sim.place(x, y, Math.min(1, b.sand), b.moist);
+      b.sand = Math.max(0, b.sand - placed);
+    }
+    m.lastAct[p] = { t: m.tick, x, y, c };
+  }
+
+  function endMatch(m, r) { m.result = r; m.phase = 'over'; m.wavesSurvived = m.waveIndex; return true; }
+
+  // Returns true when the match ended.
+  function checkStructures(m, when) {
+    const down = m.structs.filter(s => !m.sim.standing(s).standing);
+    if (m.L.versus) {
+      const d0 = down.some(s => s.owner === 0), d1 = down.some(s => s.owner === 1);
+      if (d0 && d1) return endMatch(m, { type: 'draw', msg: `Both castles had fallen ${when}. A draw.` });
+      if (d0) return endMatch(m, { type: 'win', winner: 1, msg: `The bottom castle's ${down.find(s => s.owner === 0).name} was down ${when}.` });
+      if (d1) return endMatch(m, { type: 'win', winner: 0, msg: `The top castle's ${down.find(s => s.owner === 1).name} was down ${when}.` });
+      return false;
+    }
+    if (down.length) return endMatch(m, { type: 'lost', msg: `${down[0].name} was not standing ${when}.` });
+    return false;
+  }
+
+  function callWave(m) {
+    if (m.phase !== 'build' || m.result) return;
+    if (checkStructures(m, `when wave ${m.waveIndex + 1} came in`)) return;
+    m.sim.startWave(m.L.waves[m.waveIndex]);
+    m.phase = 'wave';
+    m.shake = 30;
+  }
+
+  function finalCheck(m) {
+    if (checkStructures(m, 'after the last wave')) return;
+    if (m.L.versus) {
+      const f0 = m.sim.sandFraction(m.structs.filter(s => s.owner === 0));
+      const f1 = m.sim.sandFraction(m.structs.filter(s => s.owner === 1));
+      if (Math.abs(f0 - f1) < 0.02) endMatch(m, { type: 'draw', msg: 'Both castles held to the end with the same sand. A draw.' });
+      else endMatch(m, { type: 'win', winner: f0 > f1 ? 0 : 1, msg: `Both castles held. The ${f0 > f1 ? 'bottom' : 'top'} castle kept more of its sand.` });
+      return;
+    }
+    endMatch(m, { type: 'won', msg: m.L.daily ? 'Everything held through the daily tide.' : `Everything held. The tide is out on ${m.L.name}.` });
+  }
+
+  function matchTick(m) {
+    if (!m.result) {
+      if (m.phase === 'build') { m.timer--; if (m.timer <= 0) callWave(m); }
+      else if (m.phase === 'wave') { if (!m.sim.waveActive) { m.phase = 'settle'; m.timer = SETTLE_TICKS; } }
+      else if (m.phase === 'settle') {
+        m.timer--;
+        if (m.timer <= 0) {
+          m.waveIndex++;
+          if (m.waveIndex < m.L.waves.length) { m.phase = 'build'; m.timer = Math.round(m.L.gap * 60); }
+          else finalCheck(m);
+        }
+      }
+    }
+    m.sim.step(TICK);
+    m.tick++;
+    if (m.shake > 0) m.shake--;
+  }
+
+  function score(m) {
+    const survived = m.result ? m.wavesSurvived : m.waveIndex;
+    return Math.max(0, Math.floor(1000 * (survived / m.L.waves.length) * m.sim.sandFraction(m.structs)) - Math.floor(m.sandMoved));
+  }
 
   // ---------- game state ----------
   const G = {
-    level: 0,
-    sim: null,
-    structs: [],
-    phase: 'menu',   // menu | intro | build | wave | settle | won | lost
-    waveIndex: 0,
-    timer: 0,
-    bucket: { sand: 0, moist: 0 },
-    mode: 'dig',
-    message: '',
-    seedCounter: 1,
-    lastWaveT: -99,
-    shake: 0,
+    mode: 'solo',        // solo | daily | ghost | coop | versus
+    match: null, ghost: null, ghostMeta: null,
+    running: false, levelIndex: 0, me: 0,
+    tool: 'dig', acc: 0,
+    queue: new Map(),    // tick -> local actions
+    net: null, outbox: [], remote: { acts: new Map(), upto: -1 }, csLocal: new Map(),
+    waiting: false, desync: false, peerName: '',
   };
+
+  function scheduleLocal(c, x, y) {
+    const m = G.match;
+    if (!m || m.result || !G.running) return;
+    const t = m.tick + (G.net ? NET_DELAY : 0);
+    const a = [t, c, x, y, G.me];
+    let list = G.queue.get(t);
+    if (!list) G.queue.set(t, list = []);
+    list.push(a);
+    if (G.net) G.outbox.push(a);
+  }
+
+  // One fixed step of everything. Returns false when waiting on the network.
+  function doTick() {
+    const m = G.match;
+    const t = m.tick;
+    if (G.net) {
+      if (G.remote.upto < t) { G.waiting = true; return false; }
+      G.waiting = false;
+    }
+    const local = G.queue.get(t) || []; G.queue.delete(t);
+    const remote = G.net ? (G.remote.acts.get(t) || []) : [];
+    if (G.net) G.remote.acts.delete(t);
+    const all = (G.me === 0 ? local.concat(remote) : remote.concat(local));
+    all.forEach(a => { applyAction(m, a); m.log.push(a); });
+    matchTick(m);
+    if (G.ghost) {
+      const g = G.ghost;
+      while (g.ai < g.acts.length && g.acts[g.ai][0] <= g.tick) { applyAction(g, g.acts[g.ai]); g.ai++; }
+      matchTick(g);
+    }
+    if (ptr.down) { ptr.hold++; if (ptr.hold >= HOLD_TICKS) { ptr.hold = 0; actAt(ptr.cx, ptr.cy); } }
+    if (G.net && m.tick % 120 === 0) {
+      const v = m.sim.checksum();
+      G.csLocal.set(m.tick, v);
+      G.net.send({ k: 'cs', t: m.tick, v });
+      if (G.csLocal.size > 20) G.csLocal.delete(G.csLocal.keys().next().value);
+    }
+    if (m.result && !G.resultShown) onMatchOver();
+    return true;
+  }
+
+  // ---------- starting modes ----------
+  function resetNetState() {
+    G.queue = new Map(); G.outbox = []; G.remote = { acts: new Map(), upto: -1 }; G.csLocal = new Map();
+    G.waiting = false; G.desync = false;
+  }
+  function beginMatch(L, seed, players, mode) {
+    G.mode = mode;
+    G.match = createMatch(L, seed, players);
+    G.ghost = null;
+    G.resultShown = false;
+    G.running = false;
+    G.acc = 0;
+    resetNetState();
+    setTool('dig');
+    $('hud-level').textContent = L.name;
+    updateHud();
+  }
+  function showIntro(L, extra) {
+    $('intro-title').textContent = L.daily ? `Daily Beach · ${prettyKey(L.daily)}` : (G.levelIndex >= 0 && !L.versus ? `${G.levelIndex + 1}. ${L.name}` : L.name);
+    $('intro-desc').textContent = L.desc;
+    $('intro-hint').textContent = extra || L.hint;
+    $('intro-waves').textContent = `${L.waves.length} wave${L.waves.length > 1 ? 's' : ''}`;
+    showOverlay('intro');
+  }
+  function newSeed() { return (Math.random() * 2147483647) | 0 || 1; }
+
+  function startSolo(n) {
+    G.levelIndex = n;
+    beginMatch(LEVELS[n], newSeed(), 1, 'solo');
+    showIntro(LEVELS[n]);
+  }
+  function startDaily() {
+    const key = dailyKey();
+    G.levelIndex = -1;
+    G.dailyKeyPlaying = key;
+    beginMatch(dailyLevel(key), parseInt(key, 10), 1, 'daily');
+    showIntro(G.match.L);
+  }
+  function startGhost(meta) {
+    G.ghostMeta = meta;
+    const L = meta.d ? dailyLevel(meta.d) : LEVELS[meta.l];
+    G.levelIndex = meta.d ? -1 : meta.l;
+    beginMatch(L, meta.s, 1, meta.d && meta.d === dailyKey() ? 'daily' : 'ghost');
+    G.ghost = createMatch(L, meta.s, 1);
+    G.ghost.acts = decodeActions(meta.a);
+    G.ghost.ai = 0;
+    showIntro(L, `Racing ${meta.n || 'a friend'}'s ghost (score ${meta.sc}). Their moves show as outlines.`);
+  }
+
+  // ---------- overlays / menu ----------
+  function showOverlay(name) {
+    document.querySelectorAll('.overlay').forEach(el => { el.hidden = el.dataset.name !== name; });
+    $('overlays').hidden = !name;
+  }
+  function goMenu() {
+    stopNet();
+    G.running = false;
+    G.match = null; G.ghost = null;
+    $('hud-level').textContent = 'Tidewright';
+    buildMenu();
+    showOverlay('menu');
+  }
+  function buildMenu() {
+    const grid = $('level-grid');
+    grid.innerHTML = '';
+    LEVELS.forEach((L, i) => {
+      const b = document.createElement('button');
+      b.className = 'lvl' + (i > unlocked ? ' locked' : '') + (i < unlocked ? ' done' : '');
+      b.innerHTML = `<span class="num">${i + 1}</span><span class="nm">${L.name}</span>`;
+      b.disabled = i > unlocked;
+      b.addEventListener('click', () => startSolo(i));
+      grid.appendChild(b);
+    });
+    const key = dailyKey();
+    const best = JSON.parse(lsGet('tw_daily_best_' + key, 'null'));
+    $('daily-sub').textContent = best ? `${prettyKey(key)} · your best ${best.sc}` : `${prettyKey(key)} · not played yet`;
+    $('name-input').value = playerName;
+    $('net-note').hidden = TW.hasWebRTC;
+    const sel = $('coop-level');
+    if (!sel.options.length) LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${L.name}`; sel.appendChild(o); });
+    sel.value = String(Math.min(7, unlocked));
+  }
+
+  function onMatchOver() {
+    G.resultShown = true;
+    const m = G.match, r = m.result;
+    let title, msg = r.msg, canShare = false, canNext = false;
+    if (G.mode === 'versus') {
+      title = r.type === 'draw' ? 'A draw' : (r.winner === G.me ? 'Your castle stands' : 'Your castle fell');
+    } else if (G.mode === 'coop') {
+      title = r.type === 'won' ? 'It held' : 'Washed out';
+    } else {
+      title = r.type === 'won' ? 'It held' : 'Washed out';
+      canShare = true;
+      const sc = score(m);
+      msg += ` Score ${sc}.`;
+      if (G.ghost && G.ghostMeta) msg += ` ${G.ghostMeta.n || 'The ghost'} scored ${G.ghostMeta.sc}. ${sc > G.ghostMeta.sc ? 'You beat them.' : sc === G.ghostMeta.sc ? 'A tie.' : 'They win this one.'}`;
+      if (G.mode === 'solo') {
+        if (r.type === 'won') {
+          if (G.levelIndex >= unlocked && G.levelIndex + 1 < LEVELS.length) { unlocked = G.levelIndex + 1; lsSet('tw_unlocked', String(unlocked)); }
+          canNext = G.levelIndex + 1 < LEVELS.length;
+        }
+      } else if (G.mode === 'daily' || (G.ghostMeta && G.ghostMeta.d === dailyKey())) {
+        recordDaily(dailyKey(), { n: playerName || 'You', sc, mine: true });
+      }
+    }
+    $('result-title').textContent = title;
+    $('result-msg').textContent = msg;
+    $('btn-share').hidden = !canShare;
+    $('btn-next').hidden = !canNext;
+    $('btn-retry').hidden = G.mode === 'coop' || G.mode === 'versus';
+    $('share-status').textContent = '';
+    showOverlay('result');
+  }
+
+  // ---------- daily board ----------
+  function loadBoard(key) { return JSON.parse(lsGet('tw_daily_board_' + key, '[]')); }
+  function recordDaily(key, entry) {
+    const board = loadBoard(key);
+    if (entry.mine) {
+      const best = JSON.parse(lsGet('tw_daily_best_' + key, 'null'));
+      if (!best || entry.sc > best.sc) lsSet('tw_daily_best_' + key, JSON.stringify({ sc: entry.sc }));
+      const i = board.findIndex(e => e.mine);
+      if (i >= 0) { if (entry.sc > board[i].sc) board[i] = entry; } else board.push(entry);
+    } else {
+      const i = board.findIndex(e => !e.mine && e.n === entry.n);
+      if (i >= 0) { if (entry.sc > board[i].sc) board[i] = entry; } else board.push(entry);
+    }
+    board.sort((a, b) => b.sc - a.sc);
+    lsSet('tw_daily_board_' + key, JSON.stringify(board.slice(0, 20)));
+  }
+  function showBoard() {
+    const key = dailyKey();
+    $('board-title').textContent = `Daily Beach · ${prettyKey(key)}`;
+    const list = $('board-list');
+    list.innerHTML = '';
+    const board = loadBoard(key);
+    if (!board.length) list.innerHTML = '<p class="meta">No scores yet today. Play the beach, then share your result. Friends’ results you open land here.</p>';
+    board.forEach((e, i) => {
+      const row = document.createElement('div');
+      row.className = 'brow' + (e.mine ? ' mine' : '');
+      row.innerHTML = `<span class="rank">${i + 1}</span><span class="who"></span><span class="sc">${e.sc}</span>`;
+      row.querySelector('.who').textContent = e.n + (e.mine ? ' (you)' : '');
+      if (e.code) {
+        const b = document.createElement('button'); b.className = 'mini'; b.textContent = 'Race';
+        b.addEventListener('click', () => openGhostCode(e.code));
+        row.appendChild(b);
+      }
+      list.appendChild(row);
+    });
+    showOverlay('board');
+  }
+
+  // ---------- sharing ----------
+  async function shareText(title, text, url, statusEl) {
+    const full = url ? `${text} ${url}` : text;
+    try {
+      if (navigator.share) { await navigator.share(url ? { title, text, url } : { title, text }); if (statusEl) statusEl.textContent = 'Shared.'; return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(full); if (statusEl) statusEl.textContent = 'Copied to clipboard.'; return; } catch (e) { /* fall through */ }
+    if (statusEl) statusEl.textContent = full;
+  }
+  async function buildGhostLink(m) {
+    const meta = { v: 1, n: playerName || 'A friend', s: m.seed, sc: score(m), r: m.result ? m.result.type : 'x', a: encodeActions(m.log) };
+    if (m.L.daily) meta.d = m.L.daily; else meta.l = G.levelIndex;
+    return SITE + '#g=' + await pack(JSON.stringify(meta));
+  }
+  async function openGhostCode(code) {
+    let meta;
+    try { meta = JSON.parse(await unpack(code)); } catch (e) { alert('That link could not be read.'); return; }
+    if (!meta || meta.v !== 1 || typeof meta.a !== 'string') { alert('That link could not be read.'); return; }
+    if (meta.d && meta.d === dailyKey()) recordDaily(meta.d, { n: meta.n || 'A friend', sc: meta.sc, code });
+    if (meta.l != null && (meta.l < 0 || meta.l >= LEVELS.length)) { alert('That ghost is from a level this version does not have.'); return; }
+    const L = meta.d ? dailyLevel(meta.d) : LEVELS[meta.l];
+    $('ghost-title').textContent = `${meta.n || 'A friend'} scored ${meta.sc}`;
+    $('ghost-msg').textContent = `On ${meta.d ? 'the Daily Beach for ' + prettyKey(meta.d) : L.name}. Race their ghost on the same beach with the same waves.`;
+    $('btn-ghost-race').onclick = () => startGhost(meta);
+    showOverlay('ghost');
+  }
+
+  // ---------- networking ----------
+  function stopNet() {
+    if (G.net) { try { G.net.close(); } catch (e) { /* ignore */ } G.net = null; }
+    if (G.netTimer) { clearInterval(G.netTimer); G.netTimer = null; }
+  }
+  function startNetLoop() {
+    G.netTimer = setInterval(() => {
+      const m = G.match;
+      if (!G.net || !m) return;
+      G.net.send({ k: 'in', a: G.outbox, upto: m.tick + NET_DELAY - 1 });
+      G.outbox = [];
+    }, NET_BATCH_MS);
+  }
+  function onNetMessage(msg) {
+    const m = G.match;
+    if (msg.k === 'in') {
+      (msg.a || []).forEach(a => { let list = G.remote.acts.get(a[0]); if (!list) G.remote.acts.set(a[0], list = []); list.push(a); });
+      if (msg.upto > G.remote.upto) G.remote.upto = msg.upto;
+    } else if (msg.k === 'cs') {
+      const mine = G.csLocal.get(msg.t);
+      if (mine != null && mine !== msg.v) G.desync = true;
+    } else if (msg.k === 'hello') {
+      // guest receives the match setup from the host
+      G.peerName = msg.n || 'Host';
+      G.me = 1;
+      const L = msg.mode === 'versus' ? VERSUS_LEVEL : LEVELS[msg.level];
+      G.levelIndex = msg.mode === 'versus' ? -1 : msg.level;
+      beginMatch(L, msg.seed, 2, msg.mode);
+      G.net.send({ k: 'ready', n: playerName || 'Guest' });
+      $('join-status').textContent = `Connected to ${G.peerName}. Starting…`;
+    } else if (msg.k === 'ready') {
+      G.peerName = msg.n || 'Guest';
+      G.net.send({ k: 'go' });
+      liveStart();
+    } else if (msg.k === 'go') {
+      liveStart();
+    }
+  }
+  function liveStart() {
+    showOverlay(null);
+    G.running = true;
+    G.remote.upto = NET_DELAY - 1;   // the first delay window has no remote inputs by construction
+    startNetLoop();
+    $('hud-level').textContent = `${G.match.L.name} · with ${G.peerName}`;
+  }
+  function onNetClosed() {
+    if (!G.match || G.match.result) { stopNet(); return; }
+    G.running = false;
+    stopNet();
+    $('result-title').textContent = 'Connection lost';
+    $('result-msg').textContent = 'The link to your friend dropped. The tide waits for no one, but you can host again.';
+    $('btn-share').hidden = true; $('btn-next').hidden = true; $('btn-retry').hidden = true;
+    showOverlay('result');
+  }
+  function extractCode(text) {
+    const m = /[zp][A-Za-z0-9_-]{24,}/.exec(text || '');
+    return m ? m[0] : null;
+  }
+
+  async function hostGame(mode) {
+    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
+    stopNet();
+    G.me = 0;
+    const level = parseInt($('coop-level').value, 10) || 0;
+    const seed = newSeed();
+    const L = mode === 'versus' ? VERSUS_LEVEL : LEVELS[level];
+    G.levelIndex = mode === 'versus' ? -1 : level;
+    beginMatch(L, seed, 2, mode);
+    $('host-title').textContent = mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`;
+    $('host-status').textContent = 'Making your invite…';
+    $('host-link').value = '';
+    $('host-reply').value = '';
+    $('host-connect').disabled = true;
+    showOverlay('host');
+    const peer = new Peer();
+    G.net = peer;
+    peer.onMessage = onNetMessage;
+    peer.onClose = onNetClosed;
+    peer.onOpen = () => {
+      $('host-status').textContent = 'Connected. Waiting for your friend to load in…';
+      peer.send({ k: 'hello', mode, level, seed, n: playerName || 'Host' });
+    };
+    try {
+      const code = await peer.createOffer();
+      const link = `${SITE}#j=${code}&m=${mode === 'versus' ? 'v' : 'c'}`;
+      $('host-link').value = link;
+      $('host-status').textContent = 'Step 1: send the invite. Step 2: paste the reply your friend sends back.';
+      $('host-connect').disabled = false;
+      $('btn-host-share').onclick = () => shareText('Tidewright', mode === 'versus' ? 'Defend your castle against mine in Tidewright:' : 'Defend a sandcastle with me in Tidewright:', link, $('host-status'));
+    } catch (e) {
+      $('host-status').textContent = 'Could not make an invite: ' + (e.message || e);
+    }
+  }
+  async function hostConnect() {
+    const code = extractCode($('host-reply').value);
+    if (!code) { $('host-status').textContent = 'Paste the whole reply your friend sent.'; return; }
+    try {
+      $('host-status').textContent = 'Connecting…';
+      await G.net.acceptAnswer(code);
+    } catch (e) {
+      $('host-status').textContent = 'That reply did not work: ' + (e.message || e);
+    }
+  }
+  async function joinGame(code, mode) {
+    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
+    stopNet();
+    $('join-title').textContent = mode === 'v' ? 'Join · Opposing Tides' : 'Join · Shared Beach';
+    $('join-status').textContent = 'Reading the invite…';
+    $('join-reply').value = '';
+    $('btn-join-share').disabled = true;
+    showOverlay('join');
+    const peer = new Peer();
+    G.net = peer;
+    peer.onMessage = onNetMessage;
+    peer.onClose = onNetClosed;
+    peer.onOpen = () => { $('join-status').textContent = 'Connected. Loading the beach…'; };
+    try {
+      const reply = await peer.acceptOffer(code);
+      $('join-reply').value = reply;
+      $('btn-join-share').disabled = false;
+      $('join-status').textContent = 'Send this reply back to your friend, then wait here. The game starts by itself.';
+      $('btn-join-share').onclick = () => shareText('Tidewright reply', 'My Tidewright reply: ' + reply, null, $('join-status'));
+    } catch (e) {
+      $('join-status').textContent = 'That invite did not work: ' + (e.message || e);
+    }
+  }
+
+  // ---------- page load: links ----------
+  async function handleHash() {
+    const h = location.hash.slice(1);
+    if (!h) return false;
+    history.replaceState(null, '', location.pathname + location.search);
+    const p = new URLSearchParams(h);
+    if (p.get('g')) { await openGhostCode(p.get('g')); return true; }
+    if (p.get('j')) { await joinGame(p.get('j'), p.get('m') || 'c'); return true; }
+    return false;
+  }
+  async function pasteAnything(text) {
+    const code = extractCode(text);
+    const url = /#(.*)$/.exec(text || '');
+    if (url) { const p = new URLSearchParams(url[1]); if (p.get('g')) return openGhostCode(p.get('g')); if (p.get('j')) return joinGame(p.get('j'), p.get('m') || 'c'); }
+    if (!code) { $('paste-status').textContent = 'No Tidewright link or code found in that.'; return; }
+    // a bare code: try it as a ghost first, then as an invite
+    try { const meta = JSON.parse(await unpack(code)); if (meta && meta.v === 1) return openGhostCode(code); if (meta && meta.t === 'o') return joinGame(code, 'c'); } catch (e) { /* fall through */ }
+    $('paste-status').textContent = 'That code could not be read.';
+  }
+
+  // ---------- HUD ----------
+  const hudWave = $('hud-wave'), hudTimer = $('hud-timer'), hudBar = $('hud-bar'), hudStatus = $('hud-status');
+  const bucketFill = $('bucket-fill'), bucketNum = $('bucket-num');
+  const btnCall = $('btn-call');
+  function updateHud() {
+    const m = G.match;
+    if (!m) return;
+    const L = m.L, total = L.waves.length;
+    if (m.result) {
+      hudWave.textContent = m.result.type === 'won' ? 'Tide out' : 'Over';
+      hudTimer.textContent = ''; hudBar.style.width = '0%'; btnCall.disabled = true;
+    } else if (m.phase === 'build') {
+      hudWave.textContent = `Wave ${m.waveIndex + 1} of ${total}`;
+      hudTimer.textContent = G.waiting ? 'waiting…' : `${Math.ceil(m.timer / 60)}s`;
+      const span = (m.waveIndex === 0 ? L.prep : L.gap) * 60;
+      hudBar.style.width = `${Math.max(0, 100 * (1 - m.timer / span))}%`;
+      hudBar.className = 'bar' + (m.timer < 240 ? ' urgent' : '');
+      btnCall.disabled = !G.running;
+    } else {
+      hudWave.textContent = `Wave ${m.waveIndex + 1} of ${total}`;
+      hudTimer.textContent = G.waiting ? 'waiting…' : (m.phase === 'wave' ? 'surge' : 'settling');
+      hudBar.style.width = '100%'; hudBar.className = 'bar surge';
+      btnCall.disabled = true;
+    }
+    if (L.versus) {
+      const mine = m.structs.filter(s => s.owner === G.me), theirs = m.structs.filter(s => s.owner !== G.me);
+      const up = a => a.filter(s => m.sim.standing(s).standing).length;
+      hudStatus.textContent = `You ${up(mine)}/${mine.length} · Rival ${up(theirs)}/${theirs.length}`;
+      hudStatus.className = up(mine) === mine.length ? 'ok' : 'bad';
+    } else {
+      const st = m.structs.map(s => m.sim.standing(s));
+      const up = st.filter(s => s.standing).length;
+      let text = `${up}/${st.length} standing`;
+      if (G.ghost) { const gs = G.ghost.structs.filter(s => G.ghost.sim.standing(s).standing).length; text += ` · ghost ${gs}/${st.length}`; }
+      hudStatus.textContent = text;
+      hudStatus.className = up === st.length ? 'ok' : 'bad';
+    }
+    if (G.desync) hudStatus.textContent += ' · out of sync';
+    const b = m.buckets[G.me] || m.buckets[0];
+    bucketFill.style.height = `${(b.sand / BUCKET_CAP) * 100}%`;
+    bucketFill.style.background = b.moist > 0.6 ? '#a8865a' : b.moist > 0.3 ? '#cdb182' : '#e9d7a8';
+    bucketNum.textContent = `${Math.floor(b.sand)}`;
+  }
+  function setTool(t) {
+    G.tool = t;
+    $('btn-dig').classList.toggle('active', t === 'dig');
+    $('btn-build').classList.toggle('active', t === 'build');
+  }
+
+  // ---------- input ----------
+  const ptr = { down: false, cx: -1, cy: -1, hold: 0 };
+  function cellAt(evt) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: Math.floor((evt.clientX - rect.left - ox) / cell), y: Math.floor((evt.clientY - rect.top - oy) / cell) };
+  }
+  function actAt(x, y) {
+    const m = G.match;
+    if (!m || !G.running || m.result || !m.sim.inBounds(x, y) || m.sim.isOcean(y)) return;
+    scheduleLocal(G.tool === 'dig' ? A_DIG : A_PLACE, x, y);
+  }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-captured pointer */ }
+    const c = cellAt(e);
+    ptr.down = true; ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0;
+    actAt(c.x, c.y);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!ptr.down) return;
+    e.preventDefault();
+    const c = cellAt(e);
+    if (c.x !== ptr.cx || c.y !== ptr.cy) { ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0; actAt(c.x, c.y); }
+  });
+  const stop = () => { ptr.down = false; };
+  canvas.addEventListener('pointerup', stop);
+  canvas.addEventListener('pointercancel', stop);
+  canvas.addEventListener('lostpointercapture', stop);
+
+  $('btn-dig').addEventListener('click', () => setTool('dig'));
+  $('btn-build').addEventListener('click', () => setTool('build'));
+  btnCall.addEventListener('click', () => { if (G.match && G.running && G.match.phase === 'build') scheduleLocal(A_WAVE, 0, 0); });
+  $('btn-restart').addEventListener('click', () => retry());
+  $('btn-menu').addEventListener('click', goMenu);
+  $('btn-go').addEventListener('click', () => { showOverlay(null); G.running = true; updateHud(); });
+  $('btn-retry').addEventListener('click', () => retry());
+  $('btn-next').addEventListener('click', () => startSolo(Math.min(LEVELS.length - 1, G.levelIndex + 1)));
+  $('btn-result-menu').addEventListener('click', goMenu);
+  $('btn-share').addEventListener('click', async () => {
+    const m = G.match; if (!m) return;
+    const link = await buildGhostLink(m);
+    const sc = score(m);
+    if (m.L.daily) recordDaily(m.L.daily, { n: playerName || 'You', sc, mine: true, code: link.split('#g=')[1] });
+    shareText('Tidewright', `I scored ${sc} on ${m.L.daily ? 'today’s Daily Beach' : m.L.name} in Tidewright. Race my ghost:`, link, $('share-status'));
+  });
+  $('btn-reset').addEventListener('click', () => { unlocked = 0; lsSet('tw_unlocked', '0'); buildMenu(); });
+  $('name-input').addEventListener('change', e => { playerName = e.target.value.trim().slice(0, 16); lsSet('tw_name', playerName); });
+  $('btn-daily').addEventListener('click', startDaily);
+  $('btn-board').addEventListener('click', showBoard);
+  $('btn-board-play').addEventListener('click', startDaily);
+  $('btn-board-menu').addEventListener('click', goMenu);
+  $('btn-host-coop').addEventListener('click', () => hostGame('coop'));
+  $('btn-host-versus').addEventListener('click', () => hostGame('versus'));
+  $('btn-paste').addEventListener('click', async () => {
+    let text = $('paste-input').value;
+    if (!text && navigator.clipboard && navigator.clipboard.readText) { try { text = await navigator.clipboard.readText(); } catch (e) { /* ignore */ } }
+    pasteAnything(text);
+  });
+  $('host-connect').addEventListener('click', hostConnect);
+  $('btn-host-paste').addEventListener('click', async () => { try { $('host-reply').value = await navigator.clipboard.readText(); } catch (e) { $('host-status').textContent = 'Paste into the box with a long press.'; } });
+  $('btn-host-cancel').addEventListener('click', goMenu);
+  $('btn-join-cancel').addEventListener('click', goMenu);
+  $('btn-ghost-cancel').addEventListener('click', goMenu);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'd' || e.key === 'D') setTool('dig');
+    if (e.key === 'b' || e.key === 'B') setTool('build');
+    if (e.key === ' ' && G.match && G.running && G.match.phase === 'build') { e.preventDefault(); scheduleLocal(A_WAVE, 0, 0); }
+  });
+  function retry() {
+    if (G.mode === 'solo') startSolo(G.levelIndex);
+    else if (G.mode === 'ghost' || (G.ghostMeta && G.ghost)) startGhost(G.ghostMeta);
+    else if (G.mode === 'daily') startDaily();
+    else goMenu();
+  }
 
   // ---------- layout ----------
   let cell = 16, ox = 0, oy = 0, dpr = 1, lastW = -1, lastH = -1;
@@ -652,240 +1579,10 @@
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', layout);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
-
-  // ---------- level setup ----------
-  function startLevel(n) {
-    G.level = n;
-    const L = LEVELS[n];
-    G.sim = new Sim(COLS, ROWS, Object.assign({ seed: 1000 * (n + 1) + (G.seedCounter++) }, L.sim || {}));
-    (L.rocks || []).forEach(r => {
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) G.sim.setRock(x, y);
-    });
-    G.structs = L.structs.map(s => Object.assign({}, s));
-    // The castle starts built and packed wet, with a little headroom above the
-    // required height so the first nick of erosion does not fail it.
-    G.structs.forEach(s => {
-      for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
-        if (!G.sim.inBounds(x, y)) continue;
-        const i = G.sim.idx(x, y);
-        if (G.sim.rock[i]) continue;
-        G.sim.h[i] = Math.min(G.sim.maxH, s.req + 0.4);
-        G.sim.m[i] = 1;
-      }
-    });
-    G.waveIndex = 0;
-    G.timer = L.prep;
-    G.bucket = { sand: 4, moist: 1 };   // a starting bucket of wet sand for quick repairs
-    G.mode = 'dig';
-    G.phase = 'intro';
-    G.message = '';
-    G.lastWaveT = -99;
-    setMode('dig');
-    $('intro-title').textContent = `${n + 1}. ${L.name}`;
-    $('intro-desc').textContent = L.desc;
-    $('intro-hint').textContent = L.hint;
-    $('intro-waves').textContent = `${L.waves.length} wave${L.waves.length > 1 ? 's' : ''}`;
-    showOverlay('intro');
-    $('hud-level').textContent = L.name;
-    updateHud();
-  }
-
-  function showOverlay(name) {
-    document.querySelectorAll('.overlay').forEach(el => { el.hidden = el.dataset.name !== name; });
-    $('overlays').hidden = !name;
-  }
-
-  function buildMenu() {
-    const grid = $('level-grid');
-    grid.innerHTML = '';
-    LEVELS.forEach((L, i) => {
-      const b = document.createElement('button');
-      b.className = 'lvl' + (i > unlocked ? ' locked' : '') + (i < unlocked ? ' done' : '');
-      b.innerHTML = `<span class="num">${i + 1}</span><span class="nm">${L.name}</span>`;
-      b.disabled = i > unlocked;
-      b.addEventListener('click', () => startLevel(i));
-      grid.appendChild(b);
-    });
-  }
-
-  // ---------- flow ----------
-  function callWave() {
-    if (G.phase !== 'build') return;
-    const L = LEVELS[G.level];
-    const down = G.structs.filter(s => !G.sim.standing(s).standing);
-    if (down.length) {
-      lose(`${down[0].name} was not standing when wave ${G.waveIndex + 1} came in.`);
-      return;
-    }
-    G.sim.startWave(L.waves[G.waveIndex]);
-    G.phase = 'wave';
-    G.lastWaveT = G.sim.time;
-    G.shake = 0.5;
-  }
-
-  function lose(msg) {
-    G.phase = 'lost';
-    G.message = msg;
-    $('lost-msg').textContent = msg;
-    showOverlay('lost');
-  }
-
-  function win() {
-    G.phase = 'won';
-    if (G.level >= unlocked && G.level + 1 < LEVELS.length) { unlocked = G.level + 1; saveProgress(unlocked); }
-    else if (G.level + 1 >= LEVELS.length) { unlocked = LEVELS.length - 1; saveProgress(unlocked); }
-    $('won-msg').textContent = G.level + 1 < LEVELS.length
-      ? `Everything held. The tide is out on ${LEVELS[G.level].name}.`
-      : 'Everything held through the highest tide. That is the whole beach.';
-    $('btn-next').hidden = G.level + 1 >= LEVELS.length;
-    showOverlay('won');
-  }
-
-  function update(dt) {
-    const L = LEVELS[G.level];
-    if (G.phase === 'menu' || G.phase === 'intro') return;
-    G.sim.step(dt);
-    if (G.shake > 0) G.shake = Math.max(0, G.shake - dt);
-    applyHold(dt);
-
-    if (G.phase === 'build') {
-      G.timer -= dt;
-      if (G.timer <= 0) { G.timer = 0; callWave(); }
-    } else if (G.phase === 'wave') {
-      if (!G.sim.waveActive) { G.phase = 'settle'; G.timer = SETTLE; }
-    } else if (G.phase === 'settle') {
-      G.timer -= dt;
-      if (G.timer <= 0) {
-        G.waveIndex++;
-        if (G.waveIndex < L.waves.length) {
-          G.phase = 'build';
-          G.timer = L.gap;
-        } else {
-          const down = G.structs.filter(s => !G.sim.standing(s).standing);
-          if (down.length) lose(`${down[0].name} did not survive the last wave.`);
-          else win();
-        }
-      }
-    }
-    updateHud();
-  }
-
-  // ---------- HUD ----------
-  const hudWave = $('hud-wave'), hudTimer = $('hud-timer'), hudBar = $('hud-bar'), hudStatus = $('hud-status');
-  const bucketFill = $('bucket-fill'), bucketNum = $('bucket-num');
-  const btnCall = $('btn-call');
-  function updateHud() {
-    const L = LEVELS[G.level];
-    const total = L.waves.length;
-    if (G.phase === 'build') {
-      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
-      hudTimer.textContent = `${Math.ceil(G.timer)}s`;
-      const span = G.waveIndex === 0 ? L.prep : L.gap;
-      hudBar.style.width = `${Math.max(0, 100 * (1 - G.timer / span))}%`;
-      hudBar.className = 'bar' + (G.timer < 4 ? ' urgent' : '');
-      btnCall.disabled = false;
-    } else if (G.phase === 'wave') {
-      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
-      hudTimer.textContent = 'surge';
-      hudBar.style.width = '100%';
-      hudBar.className = 'bar surge';
-      btnCall.disabled = true;
-    } else if (G.phase === 'settle') {
-      hudWave.textContent = `Wave ${G.waveIndex + 1} of ${total}`;
-      hudTimer.textContent = 'settling';
-      hudBar.style.width = '100%';
-      hudBar.className = 'bar surge';
-      btnCall.disabled = true;
-    } else {
-      hudWave.textContent = `${total} waves`;
-      hudTimer.textContent = '';
-      hudBar.style.width = '0%';
-      btnCall.disabled = true;
-    }
-    const st = G.structs.map(s => G.sim.standing(s));
-    const up = st.filter(s => s.standing).length;
-    hudStatus.textContent = `${up}/${st.length} standing`;
-    hudStatus.className = up === st.length ? 'ok' : 'bad';
-
-    bucketFill.style.height = `${(G.bucket.sand / BUCKET_CAP) * 100}%`;
-    const mo = G.bucket.moist;
-    bucketFill.style.background = mo > 0.6 ? '#a8865a' : mo > 0.3 ? '#cdb182' : '#e9d7a8';
-    bucketNum.textContent = `${Math.floor(G.bucket.sand)}`;
-  }
-
-  function setMode(m) {
-    G.mode = m;
-    $('btn-dig').classList.toggle('active', m === 'dig');
-    $('btn-build').classList.toggle('active', m === 'build');
-  }
-
-  // ---------- input ----------
-  const ptr = { down: false, cx: -1, cy: -1, hold: 0 };
-  function cellAt(evt) {
+  function layoutIfNeeded() {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((evt.clientX - rect.left - ox) / cell);
-    const y = Math.floor((evt.clientY - rect.top - oy) / cell);
-    return { x, y };
+    if (rect.width !== lastW || rect.height !== lastH) layout();
   }
-  function act(x, y) {
-    if (G.phase !== 'build' && G.phase !== 'wave' && G.phase !== 'settle') return;
-    if (!G.sim.inBounds(x, y)) return;
-    if (G.mode === 'dig') {
-      if (G.bucket.sand >= BUCKET_CAP - 0.01) return;
-      const r = G.sim.dig(x, y, Math.min(1, BUCKET_CAP - G.bucket.sand));
-      if (r.amount > 0) {
-        const tot = G.bucket.sand + r.amount;
-        G.bucket.moist = (G.bucket.moist * G.bucket.sand + r.moist * r.amount) / tot;
-        G.bucket.sand = tot;
-      }
-    } else {
-      if (G.bucket.sand < 0.05) return;
-      const placed = G.sim.place(x, y, Math.min(1, G.bucket.sand), G.bucket.moist);
-      G.bucket.sand = Math.max(0, G.bucket.sand - placed);
-    }
-  }
-  function applyHold(dt) {
-    if (!ptr.down) return;
-    ptr.hold += dt;
-    if (ptr.hold >= 0.22) { ptr.hold = 0; act(ptr.cx, ptr.cy); }
-  }
-  canvas.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-captured pointer */ }
-    const c = cellAt(e);
-    ptr.down = true; ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0;
-    act(c.x, c.y);
-  });
-  canvas.addEventListener('pointermove', e => {
-    if (!ptr.down) return;
-    e.preventDefault();
-    const c = cellAt(e);
-    if (c.x !== ptr.cx || c.y !== ptr.cy) {
-      ptr.cx = c.x; ptr.cy = c.y; ptr.hold = 0;
-      act(c.x, c.y);
-    }
-  });
-  const stop = e => { ptr.down = false; };
-  canvas.addEventListener('pointerup', stop);
-  canvas.addEventListener('pointercancel', stop);
-  canvas.addEventListener('lostpointercapture', stop);
-
-  $('btn-dig').addEventListener('click', () => setMode('dig'));
-  $('btn-build').addEventListener('click', () => setMode('build'));
-  btnCall.addEventListener('click', callWave);
-  $('btn-restart').addEventListener('click', () => startLevel(G.level));
-  $('btn-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
-  $('btn-go').addEventListener('click', () => { G.phase = 'build'; showOverlay(null); updateHud(); });
-  $('btn-retry').addEventListener('click', () => startLevel(G.level));
-  $('btn-next').addEventListener('click', () => startLevel(Math.min(LEVELS.length - 1, G.level + 1)));
-  $('btn-lost-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
-  $('btn-won-menu').addEventListener('click', () => { G.phase = 'menu'; buildMenu(); showOverlay('menu'); });
-  $('btn-reset').addEventListener('click', () => { unlocked = 0; saveProgress(0); buildMenu(); });
-  document.addEventListener('keydown', e => {
-    if (e.key === 'd' || e.key === 'D') setMode('dig');
-    if (e.key === 'b' || e.key === 'B') setMode('build');
-    if (e.key === ' ' && G.phase === 'build') { e.preventDefault(); callWave(); }
-  });
 
   // ---------- rendering ----------
   const DRY = [236, 216, 168], WET = [166, 134, 88];
@@ -898,15 +1595,15 @@
     out[0] = Math.min(255, r * k); out[1] = Math.min(255, g * k); out[2] = Math.min(255, b * k);
   }
   const tmp = [0, 0, 0];
-  // Stable per-cell noise for foam and spray placement (0..1)
   function hash(x, y, k) {
     let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(k | 0, 1274126177) | 0;
     n = Math.imul(n ^ (n >>> 13), 1274126177);
     return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
   }
 
-  // ---------- castle art ----------
+  // castle art
   const INK = 'rgba(70,45,15,0.75)';
+  let flagColor = '#e5484d';
   function merlon(x, y, w, h) {
     ctx.fillStyle = 'rgba(255,248,225,0.6)';
     ctx.fillRect(x, y, w, h);
@@ -916,7 +1613,7 @@
   function flag(fx, fy) {
     ctx.strokeStyle = '#3b2a15'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy + cell * 0.9); ctx.stroke();
-    ctx.fillStyle = '#e5484d';
+    ctx.fillStyle = flagColor;
     ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx + cell * 0.55, fy + cell * 0.22); ctx.lineTo(fx, fy + cell * 0.44); ctx.closePath(); ctx.fill();
   }
   function drawTower(px, py, pw, ph) {
@@ -933,7 +1630,7 @@
     }
     flag(cx, cy - cell * 0.55);
   }
-  function drawKeep(px, py, pw, ph) {
+  function drawKeep(px, py, pw, ph, gateDown) {
     ctx.fillStyle = 'rgba(255,240,205,0.3)';
     ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
@@ -945,13 +1642,18 @@
     for (let x = px + 2; x <= px + pw - mw - 2; x += step) { merlon(x, py + 2, mw, mw); merlon(x, py + ph - mw - 2, mw, mw); }
     for (let y = py + 2 + step; y <= py + ph - mw - 2 - step; y += step) { merlon(px + 2, y, mw, mw); merlon(px + pw - mw - 2, y, mw, mw); }
     // gate on the seaward face
-    const gw = cell * 0.5, gh = cell * 0.55, gx = px + pw / 2, gy = py + ph - 2;
+    const gw = cell * 0.5, gh = cell * 0.55, gx = px + pw / 2;
     ctx.fillStyle = 'rgba(40,25,10,0.85)';
     ctx.beginPath();
-    ctx.moveTo(gx - gw / 2, gy);
-    ctx.lineTo(gx - gw / 2, gy - gh + gw / 2);
-    ctx.arc(gx, gy - gh + gw / 2, gw / 2, Math.PI, 0);
-    ctx.lineTo(gx + gw / 2, gy);
+    if (gateDown) {
+      const gy = py + ph - 2;
+      ctx.moveTo(gx - gw / 2, gy); ctx.lineTo(gx - gw / 2, gy - gh + gw / 2);
+      ctx.arc(gx, gy - gh + gw / 2, gw / 2, Math.PI, 0); ctx.lineTo(gx + gw / 2, gy);
+    } else {
+      const gy = py + 2;
+      ctx.moveTo(gx - gw / 2, gy); ctx.lineTo(gx - gw / 2, gy + gh - gw / 2);
+      ctx.arc(gx, gy + gh - gw / 2, gw / 2, Math.PI, 0, true); ctx.lineTo(gx + gw / 2, gy);
+    }
     ctx.closePath(); ctx.fill();
     flag(gx, py + ph / 2 - cell * 0.55);
   }
@@ -962,20 +1664,19 @@
     ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
     const mw = cell * 0.3, step = cell * 0.5;
     ctx.save();
-    ctx.strokeStyle = 'rgba(70,45,15,0.35)'; ctx.lineWidth = 1;
     if (horizontal) {
       for (let x = px + 2; x <= px + pw - mw - 2; x += step) merlon(x, py + 2, mw, mw);
-      ctx.strokeStyle = 'rgba(70,45,15,0.35)';
+      ctx.strokeStyle = 'rgba(70,45,15,0.35)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(px + 2, py + ph * 0.66); ctx.lineTo(px + pw - 2, py + ph * 0.66); ctx.stroke();
     } else {
       for (let y = py + 2; y <= py + ph - mw - 2; y += step) merlon(px + 2, y, mw, mw);
-      ctx.strokeStyle = 'rgba(70,45,15,0.35)';
+      ctx.strokeStyle = 'rgba(70,45,15,0.35)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(px + pw * 0.66, py + 2); ctx.lineTo(px + pw * 0.66, py + ph - 2); ctx.stroke();
     }
     ctx.restore();
   }
-  function drawStructure(s) {
-    const sim = G.sim;
+  function drawStructure(m, s) {
+    const sim = m.sim;
     const px = s.x * cell, py = s.y * cell, pw = s.w * cell, ph = s.h * cell;
     const healthy = [];
     let all = true, any = false;
@@ -983,7 +1684,6 @@
       const ok = sim.inBounds(x, y) && sim.h[sim.idx(x, y)] >= s.req - 0.5;
       healthy.push(ok); if (ok) any = true; else all = false;
     }
-    // rubble where the sea broke through
     let k = 0;
     for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++, k++) {
       if (healthy[k]) continue;
@@ -995,19 +1695,19 @@
         ctx.fillRect(rx, ry, r * 2, r * 1.4);
       }
     }
-    // castle art only over cells still holding their height
+    flagColor = (m.L.versus && s.owner !== G.me) ? '#3b8dd6' : '#e5484d';
     if (any) {
       ctx.save();
       ctx.beginPath();
       k = 0;
       for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++, k++) if (healthy[k]) ctx.rect(x * cell, y * cell, cell, cell);
       ctx.clip();
+      const seaBelow = sim.dist[Math.min(ROWS - 1, s.y + s.h)] < sim.dist[s.y];
       if (s.type === 'tower') drawTower(px, py, pw, ph);
-      else if (s.type === 'keep') drawKeep(px, py, pw, ph);
+      else if (s.type === 'keep') drawKeep(px, py, pw, ph, seaBelow);
       else drawWall(px, py, pw, ph, s.w >= s.h);
       ctx.restore();
     }
-    // breach outline with the height to rebuild to
     if (!all) {
       ctx.strokeStyle = 'rgba(240,180,41,0.95)';
       ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
@@ -1021,39 +1721,100 @@
     }
   }
 
-  // Phones resize the viewport when the address bar shows or hides, and the
-  // resize event is not always delivered, so re-measure whenever the canvas moves.
-  function layoutIfNeeded() {
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width !== lastW || rect.height !== lastH) layout();
+  // one shoreline: edgeY is the sea band's edge in pixels, dir -1 when the
+  // beach is above the band (crest rises up), +1 when it is below
+  function drawShore(sim, edgeY, dir, now) {
+    const up = dir < 0 ? 1 : -1;   // pixel direction toward the beach
+    if (sim.waveActive && sim.waveSpec) {
+      const spec = sim.waveSpec;
+      const env = sim.waveEnvelope();
+      const lift = cell * (1.1 + 0.35 * spec.s);
+      ctx.beginPath();
+      ctx.moveTo(0, edgeY - up * cell);
+      for (let x = 0; x <= COLS; x++) {
+        const fac = sim.waveFactor(Math.min(COLS - 1, x));
+        ctx.lineTo(x * cell, edgeY - up * (cell * 0.3 + env * fac * lift * 0.6 + Math.sin(x * 1.3 + now * 7) * cell * 0.1));
+      }
+      ctx.lineTo(COLS * cell, edgeY - up * cell);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(16,62,120,${(0.35 + 0.4 * env).toFixed(3)})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, edgeY - up * cell * 0.6);
+      for (let x = 0; x <= COLS; x++) {
+        const fac = sim.waveFactor(Math.min(COLS - 1, x));
+        ctx.lineTo(x * cell, edgeY + up * (env * fac * lift + Math.sin(x * 1.7 + now * 9) * cell * 0.15));
+      }
+      ctx.lineTo(COLS * cell, edgeY - up * cell * 0.6);
+      ctx.closePath();
+      const cg = ctx.createLinearGradient(0, edgeY + up * lift, 0, edgeY - up * cell);
+      cg.addColorStop(0, `rgba(255,255,255,${(0.9 * env).toFixed(3)})`);
+      cg.addColorStop(0.5, `rgba(200,230,255,${(0.55 * env).toFixed(3)})`);
+      cg.addColorStop(1, 'rgba(120,190,240,0.05)');
+      ctx.fillStyle = cg;
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${(0.8 * env).toFixed(3)})`;
+      for (let k = 0; k < 24; k++) {
+        const fx = hash(k, 1, 1) * COLS;
+        const fac = sim.waveFactor(Math.min(COLS - 1, Math.floor(fx)));
+        const life = (now * 1.6 + hash(k, 2, 2)) % 1;
+        const r = cell * 0.06 * (1 - life) * env * fac;
+        if (r <= 0.2) continue;
+        ctx.beginPath(); ctx.arc(fx * cell + Math.sin(k) * cell * 0.3, edgeY + up * (env * fac * lift + life * cell * 1.2), r, 0, 6.283); ctx.fill();
+      }
+    } else {
+      const cycle = 3.4;
+      const ph = (now % cycle) / cycle;
+      const rise = 0.5 - 0.5 * Math.cos(ph * 6.283);
+      const soak = ph < 0.5 ? 1 : 1 - (ph - 0.5) * 2;
+      const reach = cell * 1.7 * rise;
+      if (reach > 1) {
+        const edge = cx => edgeY + up * (reach * (0.8 + 0.2 * Math.sin(cx * 0.9 + now * 0.7)) + Math.sin(cx * 1.9 + now * 5) * cell * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(0, edgeY - up * cell * 0.5);
+        for (let x = 0; x <= COLS; x++) ctx.lineTo(x * cell, edge(x));
+        ctx.lineTo(COLS * cell, edgeY - up * cell * 0.5);
+        ctx.closePath();
+        const wg = ctx.createLinearGradient(0, edgeY + up * reach, 0, edgeY - up * cell * 0.5);
+        wg.addColorStop(0, `rgba(235,246,255,${(0.55 * soak).toFixed(3)})`);
+        wg.addColorStop(0.35, `rgba(120,185,235,${(0.35 * soak).toFixed(3)})`);
+        wg.addColorStop(1, 'rgba(60,140,210,0.1)');
+        ctx.fillStyle = wg;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,255,255,${(0.7 * soak).toFixed(3)})`;
+        ctx.lineWidth = Math.max(1.5, cell * 0.12);
+        ctx.beginPath();
+        for (let x = 0; x <= COLS * cell; x += 3) { const yy = edge(x / cell); if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy); }
+        ctx.stroke();
+      }
+    }
   }
 
   function render(t) {
     layoutIfNeeded();
-    const sim = G.sim;
+    const m = G.match;
     const W = canvas.width / dpr, H = canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#0b1b2b';
     ctx.fillRect(0, 0, W, H);
-    if (!sim) return;
+    if (!m) return;
+    const sim = m.sim;
+    const now = t * 0.001;
 
     let sx = 0, sy = 0;
-    // whole-pixel shake only: sub-pixel offsets draw seams between cells
-    if (G.shake > 0) { sx = Math.round((Math.random() - 0.5) * 4 * G.shake); sy = Math.round((Math.random() - 0.5) * 4 * G.shake); }
+    if (m.shake > 0) { const k = m.shake / 30; sx = Math.round((Math.random() - 0.5) * 4 * k); sy = Math.round((Math.random() - 0.5) * 4 * k); }
     ctx.save();
     ctx.translate(ox + sx, oy + sy);
 
-    const L = LEVELS[G.level];
     // sand and rocks
-    for (let y = 0; y < ROWS - 1; y++) {
+    for (let y = 0; y < ROWS; y++) {
+      if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
         const i = y * COLS + x;
         const px = x * cell, py = y * cell;
         if (sim.rock[i]) {
-          ctx.fillStyle = '#5f666d';
-          ctx.fillRect(px, py, cell, cell);
-          ctx.fillStyle = '#7c848c';
-          ctx.fillRect(px + 1, py + 1, cell - 2, Math.max(2, cell * 0.35));
+          ctx.fillStyle = '#5f666d'; ctx.fillRect(px, py, cell, cell);
+          ctx.fillStyle = '#7c848c'; ctx.fillRect(px + 1, py + 1, cell - 2, Math.max(2, cell * 0.35));
           continue;
         }
         sandColor(sim.h[i], sim.m[i], tmp);
@@ -1061,40 +1822,29 @@
         ctx.fillRect(px, py, cell, cell);
       }
     }
-    // cliff edges (a cell that stands above its right/bottom neighbour)
+    // cliff edges and top highlights
     const edge = Math.max(2, Math.floor(cell * 0.18));
-    ctx.fillStyle = 'rgba(70,45,15,0.45)';
-    for (let y = 0; y < ROWS - 1; y++) {
+    for (let y = 0; y < ROWS; y++) {
+      if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
         const i = y * COLS + x;
         if (sim.rock[i]) continue;
         const si = sim.g[i] + sim.h[i];
         const px = x * cell, py = y * cell;
-        if (x + 1 < COLS) {
-          const j = i + 1;
-          if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px + cell - edge, py, edge, cell);
-        }
-        if (y + 1 < ROWS - 1) {
-          const j = i + COLS;
-          if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px, py + cell - edge, cell, edge);
-        }
-        // highlight on top edge of raised sand
-        if (sim.h[i] >= 0.8) {
-          ctx.fillStyle = 'rgba(255,250,230,0.35)';
-          ctx.fillRect(px, py, cell, Math.max(1, Math.floor(cell * 0.12)));
-          ctx.fillStyle = 'rgba(70,45,15,0.45)';
-        }
+        ctx.fillStyle = 'rgba(70,45,15,0.45)';
+        if (x + 1 < COLS) { const j = i + 1; if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px + cell - edge, py, edge, cell); }
+        if (y + 1 < ROWS && !sim.oceanRow[y + 1]) { const j = i + COLS; if (!sim.rock[j] && si - (sim.g[j] + sim.h[j]) >= 0.8) ctx.fillRect(px, py + cell - edge, cell, edge); }
+        if (sim.h[i] >= 0.8) { ctx.fillStyle = 'rgba(255,250,230,0.35)'; ctx.fillRect(px, py, cell, Math.max(1, Math.floor(cell * 0.12))); }
       }
     }
-    const now = t * 0.001;
-    // wet sheen: sand the water just left keeps a mirror shine for a moment
-    for (let y = 0; y < ROWS - 1; y++) {
+    // wet sheen
+    for (let y = 0; y < ROWS; y++) {
+      if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
         const i = y * COLS + x;
         if (sim.rock[i] || sim.w[i] >= 0.012) continue;
         const sheen = (sim.m[i] - 0.972) / 0.028;
         if (sheen <= 0) continue;
-        // soft-edged so neighbouring cells blend instead of reading as tiles
         const s = Math.min(1, sheen);
         const sg = ctx.createRadialGradient(x * cell + cell / 2, y * cell + cell / 2, 0, x * cell + cell / 2, y * cell + cell / 2, cell * 0.9);
         sg.addColorStop(0, `rgba(215,235,255,${(0.22 * s).toFixed(3)})`);
@@ -1105,22 +1855,23 @@
     }
     // water body
     const wet = i => sim.w[i] >= 0.012;
-    for (let y = 0; y < ROWS - 1; y++) {
+    for (let y = 0; y < ROWS; y++) {
+      if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
         const i = y * COLS + x;
         const wv = sim.w[i];
         if (wv < 0.012) continue;
         const a = Math.min(0.85, 0.24 + wv * 0.38);
-        // gentle shimmer so standing water is never a flat block
         const sh = Math.sin(now * 2.2 + x * 0.9 + y * 1.3) * 0.04;
         ctx.fillStyle = `rgba(${(36 + sh * 200) | 0},${(118 + sh * 200) | 0},${(196 + sh * 120) | 0},${a.toFixed(3)})`;
         ctx.fillRect(x * cell, y * cell, cell, cell);
       }
     }
-    // foam: bubbles where the water rushes, crests along its leading edges
+    // foam and crests
     const crestW = Math.max(1.5, cell * 0.16);
     ctx.lineCap = 'round';
-    for (let y = 0; y < ROWS - 1; y++) {
+    for (let y = 0; y < ROWS; y++) {
+      if (sim.oceanRow[y]) continue;
       for (let x = 0; x < COLS; x++) {
         const i = y * COLS + x;
         if (!wet(i)) continue;
@@ -1129,8 +1880,7 @@
         if (f > 0.015) {
           const fa = Math.min(0.8, f * 7);
           for (let k = 0; k < 3; k++) {
-            const ph = hash(x, y, k);
-            const tw = 0.5 + 0.5 * Math.sin(now * 9 + ph * 6.283);
+            const tw = 0.5 + 0.5 * Math.sin(now * 9 + hash(x, y, k) * 6.283);
             const bx = px + (0.15 + 0.7 * hash(x, y, k + 11)) * cell;
             const by = py + (0.15 + 0.7 * hash(y, x, k + 23)) * cell;
             const r = cell * (0.07 + 0.11 * hash(x + k, y, 5)) * (0.6 + 0.4 * tw);
@@ -1138,19 +1888,18 @@
             ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.283); ctx.fill();
           }
         }
-        const upDry = y === 0 || !wet(i - COLS);
+        const upDry = y === 0 || (!sim.oceanRow[y - 1] && !wet(i - COLS));
+        const downDry = y === ROWS - 1 || (!sim.oceanRow[y + 1] && !wet(i + COLS));
         const leftDry = x === 0 || !wet(i - 1);
         const rightDry = x === COLS - 1 || !wet(i + 1);
-        if (!upDry && !leftDry && !rightDry) continue;
+        if (!upDry && !downDry && !leftDry && !rightDry) continue;
         const ca = Math.min(0.95, 0.4 + f * 5);
-        if (upDry) {
-          ctx.strokeStyle = `rgba(255,255,255,${ca.toFixed(3)})`;
-          ctx.lineWidth = crestW;
+        ctx.strokeStyle = `rgba(255,255,255,${ca.toFixed(3)})`;
+        ctx.lineWidth = crestW;
+        if (upDry || downDry) {
+          const base = upDry ? py + cell * 0.18 : py + cell * 0.82;
           ctx.beginPath();
-          for (let s = 0; s <= cell; s += 3) {
-            const yy = py + cell * 0.18 + Math.sin((px + s) * 0.45 + now * 11 + y) * cell * 0.1;
-            if (s === 0) ctx.moveTo(px + s, yy); else ctx.lineTo(px + s, yy);
-          }
+          for (let s = 0; s <= cell; s += 3) { const yy = base + Math.sin((px + s) * 0.45 + now * 11 + y) * cell * 0.1; if (s === 0) ctx.moveTo(px + s, yy); else ctx.lineTo(px + s, yy); }
           ctx.stroke();
         }
         if (leftDry || rightDry) {
@@ -1158,157 +1907,117 @@
           ctx.lineWidth = crestW * 0.7;
           ctx.beginPath();
           const ex = leftDry ? px + cell * 0.15 : px + cell * 0.85;
-          for (let s = 0; s <= cell; s += 3) {
-            const xx = ex + Math.sin((py + s) * 0.45 + now * 9 + x) * cell * 0.08;
-            if (s === 0) ctx.moveTo(xx, py + s); else ctx.lineTo(xx, py + s);
-          }
+          for (let s = 0; s <= cell; s += 3) { const xx = ex + Math.sin((py + s) * 0.45 + now * 9 + x) * cell * 0.08; if (s === 0) ctx.moveTo(xx, py + s); else ctx.lineTo(xx, py + s); }
           ctx.stroke();
         }
       }
     }
-    // ocean row
-    const oyp = (ROWS - 1) * cell;
-    const grad = ctx.createLinearGradient(0, oyp, 0, oyp + cell);
-    grad.addColorStop(0, '#2b7fc9');
-    grad.addColorStop(1, '#155a9c');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, oyp, COLS * cell, cell);
-    // breaker: a crest that swells up off the sea row and curls over as the surge starts
-    if (sim.waveActive && sim.waveSpec) {
-      const spec = sim.waveSpec;
-      const dur = spec.duration || 1.6;
-      const p = Math.min(1, sim.waveT / dur);
-      const env = Math.sin(Math.PI * p);
-      const lift = cell * (1.1 + 0.35 * spec.s);
-      // dark swell under the crest
-      ctx.beginPath();
-      ctx.moveTo(0, oyp + cell);
-      for (let x = 0; x <= COLS; x++) {
-        const fac = sim.waveFactor(Math.min(COLS - 1, x));
-        const yy = oyp + cell * 0.3 - env * fac * lift * 0.6 + Math.sin(x * 1.3 + now * 7) * cell * 0.1;
-        ctx.lineTo(x * cell, yy);
-      }
-      ctx.lineTo(COLS * cell, oyp + cell);
-      ctx.closePath();
-      ctx.fillStyle = `rgba(16,62,120,${(0.35 + 0.4 * env).toFixed(3)})`;
-      ctx.fill();
-      // white crest, brightest at the peak of the surge
-      ctx.beginPath();
-      ctx.moveTo(0, oyp + cell * 0.6);
-      for (let x = 0; x <= COLS; x++) {
-        const fac = sim.waveFactor(Math.min(COLS - 1, x));
-        const yy = oyp - env * fac * lift + Math.sin(x * 1.7 + now * 9) * cell * 0.15;
-        ctx.lineTo(x * cell, yy);
-      }
-      ctx.lineTo(COLS * cell, oyp + cell * 0.6);
-      ctx.closePath();
-      const cg = ctx.createLinearGradient(0, oyp - lift, 0, oyp + cell);
-      cg.addColorStop(0, `rgba(255,255,255,${(0.9 * env).toFixed(3)})`);
-      cg.addColorStop(0.5, `rgba(200,230,255,${(0.55 * env).toFixed(3)})`);
-      cg.addColorStop(1, 'rgba(120,190,240,0.05)');
-      ctx.fillStyle = cg;
-      ctx.fill();
-      // spray thrown off the crest
-      ctx.fillStyle = `rgba(255,255,255,${(0.8 * env).toFixed(3)})`;
-      for (let k = 0; k < 24; k++) {
-        const fx = hash(k, 1, 1) * COLS;
-        const fac = sim.waveFactor(Math.min(COLS - 1, Math.floor(fx)));
-        const life = (now * 1.6 + hash(k, 2, 2)) % 1;
-        const sx2 = fx * cell + Math.sin(k) * cell * 0.3;
-        const sy2 = oyp - env * fac * lift - life * cell * 1.2;
-        const r = cell * 0.06 * (1 - life) * env * fac;
-        if (r <= 0.2) continue;
-        ctx.beginPath(); ctx.arc(sx2, sy2, r, 0, 6.283); ctx.fill();
-      }
-    }
-    // rolling swell lines so the sea is never still
-    ctx.lineWidth = 1.5;
-    for (let k = 0; k < 4; k++) {
-      const yy = oyp + cell * (0.2 + 0.2 * k) + Math.sin(now * 1.4 + k * 1.7) * cell * 0.06;
-      ctx.strokeStyle = `rgba(255,255,255,${(0.22 + 0.12 * (k % 2)).toFixed(2)})`;
-      ctx.beginPath();
-      for (let x = 0; x <= COLS * cell; x += 3) {
-        const y2 = yy + Math.sin(x * 0.07 + now * (1.8 + 0.5 * k) + k * 2) * cell * 0.12
-          + Math.sin(x * 0.021 - now * 1.1 + k) * cell * 0.08;
-        if (x === 0) ctx.moveTo(x, y2); else ctx.lineTo(x, y2);
-      }
-      ctx.stroke();
-    }
-    // lapping wash: between surges the sea keeps sliding up into the wet zone and soaking away
-    if (!sim.waveActive) {
-      const cycle = 3.4;
-      const ph = (now % cycle) / cycle;                 // 0..1
-      const rise = 0.5 - 0.5 * Math.cos(ph * 6.283);    // 0 -> 1 -> 0
-      const soak = ph < 0.5 ? 1 : 1 - (ph - 0.5) * 2;   // fades while receding
-      const reach = cell * 1.7 * rise;
-      if (reach > 1) {
-        const edgeY = cx => oyp - reach * (0.8 + 0.2 * Math.sin(cx * 0.9 + now * 0.7)) + Math.sin(cx * 1.9 + now * 5) * cell * 0.1;
-        ctx.beginPath();
-        ctx.moveTo(0, oyp + cell * 0.5);
-        for (let x = 0; x <= COLS; x++) ctx.lineTo(x * cell, edgeY(x));
-        ctx.lineTo(COLS * cell, oyp + cell * 0.5);
-        ctx.closePath();
-        const wg = ctx.createLinearGradient(0, oyp - reach, 0, oyp + cell * 0.5);
-        wg.addColorStop(0, `rgba(235,246,255,${(0.55 * soak).toFixed(3)})`);
-        wg.addColorStop(0.35, `rgba(120,185,235,${(0.35 * soak).toFixed(3)})`);
-        wg.addColorStop(1, 'rgba(60,140,210,0.1)');
-        ctx.fillStyle = wg;
-        ctx.fill();
-        // foam line along the wash's leading edge
-        ctx.strokeStyle = `rgba(255,255,255,${(0.7 * soak).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1.5, cell * 0.12);
+    // sea bands
+    const bands = [];
+    sim.oceanRows.forEach(y => { const b = bands[bands.length - 1]; if (b && b[1] === y - 1) b[1] = y; else bands.push([y, y]); });
+    bands.forEach(([y0, y1]) => {
+      const top = y0 * cell, bot = (y1 + 1) * cell;
+      const grad = ctx.createLinearGradient(0, top, 0, bot);
+      grad.addColorStop(0, '#2b7fc9'); grad.addColorStop(1, '#155a9c');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, top, COLS * cell, bot - top);
+      ctx.lineWidth = 1.5;
+      const lines = 4 * (y1 - y0 + 1);
+      for (let k = 0; k < lines; k++) {
+        const yy = top + (bot - top) * (0.15 + 0.75 * k / lines) + Math.sin(now * 1.4 + k * 1.7) * cell * 0.06;
+        ctx.strokeStyle = `rgba(255,255,255,${(0.22 + 0.12 * (k % 2)).toFixed(2)})`;
         ctx.beginPath();
         for (let x = 0; x <= COLS * cell; x += 3) {
-          const yy = edgeY(x / cell);
-          if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+          const y2 = yy + Math.sin(x * 0.07 + now * (1.8 + 0.5 * k) + k * 2) * cell * 0.12 + Math.sin(x * 0.021 - now * 1.1 + k) * cell * 0.08;
+          if (x === 0) ctx.moveTo(x, y2); else ctx.lineTo(x, y2);
         }
         ctx.stroke();
       }
-    }
-    // ripples announcing the next wave
-    if (G.phase === 'build') {
-      const spec = L.waves[G.waveIndex];
-      const span = G.waveIndex === 0 ? L.prep : L.gap;
-      const prog = 1 - G.timer / span;
-      const intensity = Math.max(0, (prog - 0.35) / 0.65);
-      if (intensity > 0) {
-        const fx = spec.focus != null ? (spec.focus + 0.5) * cell : COLS * cell / 2;
-        const width = spec.focus != null ? (spec.width || 5) * cell * 1.6 : COLS * cell;
-        ctx.strokeStyle = `rgba(255,255,255,${(0.25 + 0.55 * intensity).toFixed(3)})`;
-        ctx.lineWidth = 1.5;
-        const rings = 1 + Math.floor(intensity * 3);
-        for (let k = 0; k < rings; k++) {
-          const ph = ((t * 0.0015) + k * 0.33) % 1;
-          const yy = oyp + cell * (0.15 + 0.7 * ph);
-          const half = width * (0.45 + 0.35 * ph);
-          ctx.beginPath();
-          ctx.moveTo(Math.max(0, fx - half), yy);
-          ctx.quadraticCurveTo(fx, yy - cell * 0.35 * intensity, Math.min(COLS * cell, fx + half), yy);
-          ctx.stroke();
+      // ripples announcing the next wave
+      if (m.phase === 'build' && !m.result) {
+        const spec = m.L.waves[m.waveIndex];
+        const span = (m.waveIndex === 0 ? m.L.prep : m.L.gap) * 60;
+        const intensity = Math.max(0, ((1 - m.timer / span) - 0.35) / 0.65);
+        if (intensity > 0) {
+          const fx = spec.focus != null ? (spec.focus + 0.5) * cell : COLS * cell / 2;
+          const width = spec.focus != null ? (spec.width || 5) * cell * 1.6 : COLS * cell;
+          ctx.strokeStyle = `rgba(255,255,255,${(0.25 + 0.55 * intensity).toFixed(3)})`;
+          ctx.lineWidth = 1.5;
+          const rings = 1 + Math.floor(intensity * 3);
+          for (let k = 0; k < rings; k++) {
+            const ph = ((now * 1.5) + k * 0.33) % 1;
+            const yy = top + (bot - top) * (0.15 + 0.7 * ph);
+            const half = width * (0.45 + 0.35 * ph);
+            ctx.beginPath();
+            ctx.moveTo(Math.max(0, fx - half), yy);
+            ctx.quadraticCurveTo(fx, yy - cell * 0.35 * intensity, Math.min(COLS * cell, fx + half), yy);
+            ctx.stroke();
+          }
         }
       }
-    }
-    // wet zone tint line
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    const wy = (ROWS - 1 - sim.wetRows) * cell;
-    ctx.moveTo(0, wy); ctx.lineTo(COLS * cell, wy);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      if (y0 > 0) drawShore(sim, top, -1, now);
+      if (y1 < ROWS - 1) drawShore(sim, bot, 1, now);
+      // wet zone lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      if (y0 - sim.wetRows > 0) { const wy = (y0 - sim.wetRows) * cell; ctx.moveTo(0, wy); ctx.lineTo(COLS * cell, wy); }
+      if (y1 + 1 + sim.wetRows < ROWS) { const wy = (y1 + 1 + sim.wetRows) * cell; ctx.moveTo(0, wy); ctx.lineTo(COLS * cell, wy); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
 
-    // castle: art is drawn over cells that still hold their height; breached
-    // cells show rubble and an amber outline with the height to rebuild to
+    // ghost overlay: where the ghost's sand differs from the starting beach
+    if (G.ghost) {
+      const g = G.ghost.sim;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      for (let y = 0; y < ROWS; y++) {
+        if (sim.oceanRow[y]) continue;
+        for (let x = 0; x < COLS; x++) {
+          const i = y * COLS + x;
+          const d = g.h[i] - m.h0[i];
+          if (d > 0.5) ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          else if (d < -0.5) ctx.strokeStyle = 'rgba(30,20,10,0.8)';
+          else continue;
+          ctx.strokeRect(x * cell + 2.5, y * cell + 2.5, cell - 5, cell - 5);
+        }
+      }
+      ctx.setLineDash([]);
+      const la = G.ghost.lastAct[0];
+      if (la && G.ghost.tick - la.t < 24) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(la.x * cell + cell / 2, la.y * cell + cell / 2, cell * 0.75, 0, 6.283); ctx.stroke();
+      }
+    }
+
+    // castle
     ctx.font = `bold ${Math.max(9, Math.floor(cell * 0.6))}px system-ui, sans-serif`;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    G.structs.forEach(s => drawStructure(s));
+    m.structs.forEach(s => drawStructure(m, s));
 
+    // rival's last touch in live play
+    if (G.net && m.players > 1) {
+      const la = m.lastAct[1 - G.me];
+      if (la && m.tick - la.t < 20) {
+        ctx.strokeStyle = 'rgba(59,141,214,0.9)'; ctx.lineWidth = 2;
+        ctx.strokeRect(la.x * cell + 1, la.y * cell + 1, cell - 2, cell - 2);
+      }
+    }
     // cursor cell
-    if (ptr.down && sim.inBounds(ptr.cx, ptr.cy) && ptr.cy < ROWS - 1) {
-      ctx.strokeStyle = G.mode === 'dig' ? 'rgba(20,20,20,0.7)' : 'rgba(255,255,255,0.9)';
+    if (ptr.down && sim.inBounds(ptr.cx, ptr.cy) && !sim.isOcean(ptr.cy)) {
+      ctx.strokeStyle = G.tool === 'dig' ? 'rgba(20,20,20,0.7)' : 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 2;
       ctx.strokeRect(ptr.cx * cell + 1, ptr.cy * cell + 1, cell - 2, cell - 2);
+    }
+    if (G.waiting && G.running) {
+      ctx.fillStyle = 'rgba(11,27,43,0.55)';
+      ctx.fillRect(0, 0, COLS * cell, ROWS * cell);
+      ctx.fillStyle = '#eef4f8';
+      ctx.font = `bold ${Math.max(12, cell)}px system-ui, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('waiting for your friend…', COLS * cell / 2, ROWS * cell / 2);
     }
     ctx.restore();
   }
@@ -1316,19 +2025,29 @@
   // ---------- main loop ----------
   let last = performance.now();
   function frame(t) {
-    const dt = Math.min(0.045, (t - last) / 1000);
+    const dt = Math.min(0.1, (t - last) / 1000);
     last = t;
-    if (G.sim) update(dt);
+    if (G.match && G.running) {
+      G.acc += dt;
+      let n = 0;
+      while (G.acc >= TICK && n < 4) {
+        if (!doTick()) { G.acc = 0; break; }
+        G.acc -= TICK; n++;
+      }
+      if (G.acc > TICK * 4) G.acc = TICK * 4;
+      updateHud();
+    }
     render(t);
     requestAnimationFrame(frame);
   }
 
-  // Debug handle for headless play-testing: window.__tw.step(dt) advances one frame.
-  window.__tw = { G, step: dt => { update(dt); render(performance.now()); }, LEVELS };
+  // Debug handle for headless play-testing: window.__tw.run(seconds) advances ticks.
+  window.__tw = { G, tick: doTick, run: secs => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) if (G.match && G.running) doTick(); updateHud(); render(performance.now()); }, LEVELS, VERSUS_LEVEL, startSolo, startDaily, startGhost, buildGhostLink, score, createMatch, applyAction, matchTick };
 
   layout();
   buildMenu();
   showOverlay('menu');
+  handleHash().catch(() => {});
   requestAnimationFrame(frame);
 })();
 

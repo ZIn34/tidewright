@@ -15,13 +15,25 @@ Every level is a beach that floods on a timer. Your castle starts built. Dig moa
 
 Structures are checked when each wave arrives and again after the last one settles. A breached piece shows an amber outline with the height to rebuild it to. Overbuild for a buffer.
 
+## With friends
+
+No server anywhere. Every mode works on the GitHub Pages site and in the standalone file.
+
+- **Daily Beach.** Everyone gets the same layout and the same waves for the day. Score is sand still standing, scaled by waves survived, minus sand moved. Your best is kept on your device; friends' results you open land on your board.
+- **Ghost Tide.** After any solo or daily run, Share ghost makes a link that carries your inputs (a few hundred bytes). A friend who opens it plays the same beach with the same waves while your moves appear as outlines, and sees your score to beat.
+- **Shared Beach (co-op).** Host picks a level and sends an invite link. The friend opens it and sends back a reply, which the host pastes in. From then on the two phones talk directly and both play on one beach with their own buckets.
+- **Opposing Tides (versus).** Same hand-off, on a mirrored beach with the sea in the middle and a castle on each shore. Either player can call the next wave early. A castle that is down when a wave arrives loses; if both hold to the end, the one with more sand wins.
+
+How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, no engine-specific math), so only inputs are ever shared. Live play is delay-based lockstep over a WebRTC data channel with manual signaling through the invite and reply codes, and peers compare sand checksums every two seconds to flag a desync.
+
 ## Project layout
 
 | File | Purpose |
 | --- | --- |
 | `sim.js` | Beach simulation: cellular water flow, moisture, erosion, slumping. No DOM. |
-| `levels.js` | The ten hand-made levels: blueprints, rocks, wave sequences. |
-| `game.js` | Rendering, touch input, HUD, level flow, wave animation. |
+| `levels.js` | The ten hand-made levels plus the mirrored versus beach. |
+| `game.js` | Match engine (fixed tick, input log, replay), rendering, touch input, HUD, modes, networking UI. |
+| `net.js` | Serverless WebRTC peer link, code packing, action log codec. |
 | `index.html` | Page shell and styles. Loads the three scripts. |
 | `build.js` | Inlines everything into `dist/tidewright.html` (artifact fragment) and `Tidewright.html` (standalone). |
 | `tune.js` | Headless harness: wave reach, wall erosion, moat effect, perf. |

@@ -116,7 +116,28 @@
     },
   ];
 
-  const api = { LEVELS };
+  // Opposing Tides: the sea runs through the middle, a castle on each shore.
+  // Player 0 (host) holds the bottom shore, player 1 the top. The wet zone on
+  // both sides is shared sand: digging your moat lowers the bar for both.
+  const VERSUS_LEVEL = {
+    name: 'Opposing Tides',
+    versus: true,
+    desc: 'Two castles, one sea between them. Defend yours. Either player can call the next wave early.',
+    hint: 'Call the wave when you are ready and your rival is not.',
+    prep: 24, gap: 13,
+    sim: { oceanRows: [13, 14], slope: 0.65 },
+    waves: [{ s: 3.0 }, { s: 3.5 }, { s: 4.0 }, { s: 4.5 }, { s: 5.0 }],
+    structs: [
+      { name: 'Keep', type: 'keep', owner: 0, x: 8, y: 22, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 0, x: 4, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 0, x: 14, y: 21, w: 2, h: 2, req: 3 },
+      { name: 'Keep', type: 'keep', owner: 1, x: 8, y: 3, w: 3, h: 3, req: 2 },
+      { name: 'West Tower', type: 'tower', owner: 1, x: 4, y: 5, w: 2, h: 2, req: 3 },
+      { name: 'East Tower', type: 'tower', owner: 1, x: 14, y: 5, w: 2, h: 2, req: 3 },
+    ],
+  };
+
+  const api = { LEVELS, VERSUS_LEVEL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tidewright = Object.assign(root.Tidewright || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);

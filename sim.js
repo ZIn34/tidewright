@@ -1,4 +1,10 @@
 // Tidewright - beach simulation core (no DOM). Works in browser and node.
+//
+// Determinism matters: the same level, seed and input sequence must produce
+// the identical beach on every device, because replays (ghosts) and live
+// multiplayer send only inputs. So the sim uses a fixed timestep, an integer
+// PRNG, and no transcendental Math functions (sin/exp can differ by an ulp
+// between JavaScript engines).
 (function (root) {
   'use strict';
 
@@ -39,20 +45,33 @@
       this.rand = mulberry32(opts.seed || 1);
       this.time = 0;
 
+      // Sea rows: the bottom row by default, or any rows (a mirrored beach
+      // puts the sea in the middle with a beach on each side).
+      this.oceanRows = (opts.oceanRows || [rows - 1]).slice();
+      this.oceanRow = new Uint8Array(rows);
+      this.oceanRows.forEach(y => { this.oceanRow[y] = 1; });
+      this.dist = new Int16Array(rows);  // rows to the nearest sea row
+      let maxDist = 1;
       for (let y = 0; y < rows; y++) {
+        let d = 1e9;
+        this.oceanRows.forEach(o => { d = Math.min(d, Math.abs(y - o)); });
+        this.dist[y] = d;
+        if (d > maxDist) maxDist = d;
+      }
+      this.maxDist = maxDist;
+
+      for (let y = 0; y < rows; y++) {
+        const d = this.dist[y];
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
-          const up = (rows - 1 - y) / (rows - 1); // 0 at ocean row, 1 at top
-          this.g[i] = this.slope * up;
+          if (this.oceanRow[y]) { this.g[i] = -0.6; this.m[i] = 1; continue; }
+          this.g[i] = this.slope * d / maxDist;
           // moisture gradient: wet near the water, dry up the beach
-          const distFromWet = y - (rows - 1 - this.wetRows);
-          if (distFromWet >= 0) this.m[i] = 1;
-          else this.m[i] = Math.max(0.12, 0.9 + distFromWet * 0.08);
+          if (d <= this.wetRows) this.m[i] = 1;
+          else this.m[i] = Math.max(0.12, 0.9 - (d - this.wetRows) * 0.08);
           if (opts.allWet) this.m[i] = 1;
         }
       }
-      // ocean row is a basin
-      for (let x = 0; x < cols; x++) this.g[(rows - 1) * cols + x] = -0.6;
 
       this.waveActive = false;
       this.waveT = 0;
@@ -62,7 +81,7 @@
 
     idx(x, y) { return y * this.cols + x; }
     inBounds(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
-    isOcean(y) { return y === this.rows - 1; }
+    isOcean(y) { return this.oceanRow[y] === 1; }
     surface(i) { return this.g[i] + this.h[i] + this.w[i]; }
 
     setRock(x, y) {
@@ -79,16 +98,25 @@
       for (let x = 0; x < this.cols; x++) this.waveNoise[x] = 0.85 + this.rand() * 0.3;
     }
 
-    // Wave injection profile for a column, 0..1 factor
+    // Wave injection profile for a column, 0..~1.15
     waveFactor(x) {
       const s = this.waveSpec;
       let f = this.waveNoise[x];
       if (s.focus != null) {
         const width = s.width || 5;
         const d = (x - s.focus) / width;
-        f *= 0.15 + 0.85 * Math.exp(-d * d);
+        const d2 = d * d;
+        f *= 0.15 + 0.85 / (1 + d2 * (1 + 0.5 * d2));   // bell curve without Math.exp
       }
       return f;
+    }
+
+    // Surge envelope 0..1 over the wave's duration (parabola, not Math.sin)
+    waveEnvelope() {
+      const s = this.waveSpec;
+      if (!s || !this.waveActive) return 0;
+      const u = Math.min(1, this.waveT / (s.duration || 1.6));
+      return 4 * u * (1 - u);
     }
 
     step(dt) {
@@ -96,34 +124,36 @@
       this.time += dt;
       this.flow.fill(0);
 
-      // Wave injection into the ocean row
+      // Wave injection into the sea rows
       if (this.waveActive) {
         const s = this.waveSpec;
         const dur = s.duration || 1.6;
-        const t = this.waveT;
-        const env = Math.sin(Math.PI * Math.min(1, t / dur));
-        const base = (rows - 1) * cols;
-        for (let x = 0; x < cols; x++) {
-          this.w[base + x] += s.s * env * this.waveFactor(x) * dt * 3.0;
+        const env = this.waveEnvelope();
+        for (const oy of this.oceanRows) {
+          const base = oy * cols;
+          for (let x = 0; x < cols; x++) this.w[base + x] += s.s * env * this.waveFactor(x) * dt * 3.0;
         }
         this.waveT += dt;
-        if (t >= dur) this.waveActive = false;
+        if (this.waveT >= dur + dt * 0.5) this.waveActive = false;
       }
 
       // Water flow
       const sub = 3;
       for (let k = 0; k < sub; k++) this.flowStep(dt / sub);
 
-      // Ocean row drains back to sea when not surging
+      // Sea rows drain back to sea when not surging
       if (!this.waveActive) {
-        const base = (rows - 1) * cols;
         const keep = Math.max(0, 1 - 5 * dt);
-        for (let x = 0; x < cols; x++) this.w[base + x] *= keep;
+        for (const oy of this.oceanRows) {
+          const base = oy * cols;
+          for (let x = 0; x < cols; x++) this.w[base + x] *= keep;
+        }
       }
 
       // Absorption, drying, erosion, slump
-      const wetStart = rows - 1 - this.wetRows;
-      for (let y = 0; y < rows - 1; y++) {
+      for (let y = 0; y < rows; y++) {
+        if (this.oceanRow[y]) continue;
+        const wetRow = this.dist[y] <= this.wetRows;
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           if (this.rock[i]) continue;
@@ -135,7 +165,7 @@
             this.w[i] = 0;
             this.m[i] = Math.max(0, this.m[i] - this.dryRate * dt);
           }
-          if (y >= wetStart) this.m[i] = Math.max(this.m[i], 0.85);
+          if (wetRow) this.m[i] = Math.max(this.m[i], 0.85);
 
           // Erosion of built sand by rushing / pressing water.
           // Only the part of a neighbour's water column that sits above this
@@ -212,7 +242,8 @@
     slump(dt) {
       const cols = this.cols, rows = this.rows;
       const p = Math.min(1, dt * 5);
-      for (let y = 0; y < rows - 1; y++) {
+      for (let y = 0; y < rows; y++) {
+        if (this.oceanRow[y]) continue;
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           if (this.rock[i]) continue;
@@ -220,7 +251,7 @@
           const si = this.g[i] + this.h[i];
           for (let d = 0; d < 4; d++) {
             const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
-            if (!this.inBounds(nx, ny) || ny === rows - 1) continue;
+            if (!this.inBounds(nx, ny) || this.oceanRow[ny]) continue;
             const j = ny * cols + nx;
             if (this.rock[j]) continue;
             const diff = si - (this.g[j] + this.h[j]);
@@ -237,7 +268,7 @@
       }
     }
 
-    // Player digs one unit; returns {amount, moist}
+    // Player digs; returns {amount, moist}
     dig(x, y, amount) {
       if (!this.inBounds(x, y) || this.isOcean(y)) return { amount: 0, moist: 0 };
       const i = this.idx(x, y);
@@ -274,6 +305,26 @@
         }
       }
       return { ok, total, standing: ok === total };
+    }
+
+    // Fraction of required sand still in place across a set of structures (0..1)
+    sandFraction(structs) {
+      let have = 0, need = 0;
+      structs.forEach(st => {
+        for (let y = st.y; y < st.y + st.h; y++) for (let x = st.x; x < st.x + st.w; x++) {
+          if (!this.inBounds(x, y)) continue;
+          need += st.req;
+          have += Math.max(0, Math.min(st.req, this.h[this.idx(x, y)]));
+        }
+      });
+      return need > 0 ? have / need : 1;
+    }
+
+    // Cheap fingerprint of the sand, for detecting desync between peers
+    checksum() {
+      let s = 0;
+      for (let i = 0; i < this.h.length; i++) s = (s + Math.round(this.h[i] * 64) * (i % 251 + 1)) | 0;
+      return s;
     }
   }
 

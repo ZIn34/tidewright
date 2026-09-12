@@ -115,6 +115,29 @@
   .lg-wet { background: #a68658; }
   .lg-dry { background: #ecd8a8; }
   .lg-bp { border: 2px dashed var(--warn); box-sizing: border-box; background: rgba(240,180,41,0.15); }
+  #overlays { overflow-y: auto; align-items: flex-start; }
+  .overlay { margin: auto; }
+  .section { margin: 18px 0 8px; font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-dim); }
+  .field { display: block; margin: 8px 0; }
+  .field span { display: block; font-size: 12px; color: var(--ink-dim); margin-bottom: 4px; letter-spacing: 0.02em; }
+  .field input, .field textarea, .pastebox textarea, #coop-level {
+    width: 100%; box-sizing: border-box; border: 1px solid var(--panel-2); border-radius: 8px; background: var(--bg); color: var(--ink);
+    font: inherit; padding: 8px 10px; resize: none;
+  }
+  .field textarea[readonly] { color: var(--ink-dim); font-size: 12px; word-break: break-all; }
+  .friends { display: grid; gap: 8px; }
+  .friends .wide { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; }
+  .friends .wide small { color: var(--ink-dim); font-weight: 400; font-size: 12px; }
+  .friends .pair { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+  #coop-level { width: auto; max-width: 140px; }
+  .pastebox { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
+  .pastebox button { border: 0; border-radius: 10px; font: inherit; font-weight: 700; background: var(--panel-2); color: var(--ink); padding: 0 14px; cursor: pointer; }
+  .board { display: grid; gap: 6px; margin: 10px 0 6px; }
+  .brow { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
+  .brow.mine { outline: 2px solid var(--sand); }
+  .brow .rank { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .brow .sc { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .brow .mini { border: 0; border-radius: 8px; background: var(--sea); color: var(--ink); font: inherit; font-weight: 700; padding: 6px 10px; cursor: pointer; }
 </style>
 
 <div id="app">
@@ -153,33 +176,88 @@
       <div class="sw lg-bp"></div><div>Breach: rebuild to the number shown</div>
     </div>
     <div id="level-grid"></div>
+
+    <h3 class="section">With friends</h3>
+    <label class="field"><span>Your name on shared results</span><input id="name-input" type="text" maxlength="16" placeholder="Beachcomber" autocomplete="nickname"></label>
+    <div class="friends">
+      <button id="btn-daily" class="wide"><b>Daily Beach</b><small id="daily-sub"></small></button>
+      <button id="btn-board" class="wide"><b>Today's board</b><small>Your best and friends' results you have opened</small></button>
+      <div class="pair">
+        <button id="btn-host-coop" class="wide"><b>Host co-op</b><small>Defend one castle together</small></button>
+        <select id="coop-level" aria-label="Co-op level"></select>
+      </div>
+      <button id="btn-host-versus" class="wide"><b>Host versus</b><small>Opposing Tides, a castle each</small></button>
+      <div class="pastebox">
+        <textarea id="paste-input" rows="2" placeholder="Paste an invite or a ghost link here"></textarea>
+        <button id="btn-paste">Open</button>
+      </div>
+      <p class="meta" id="paste-status"></p>
+      <p class="meta" id="net-note" hidden>This browser cannot make direct connections, so live modes are off. Daily and ghost links still work.</p>
+    </div>
     <div class="row"><button id="btn-reset" class="quiet">Reset progress</button></div>
   </div>
+
   <div class="overlay" data-name="intro" hidden>
     <h2 id="intro-title"></h2>
     <p id="intro-desc"></p>
     <p class="hint" id="intro-hint"></p>
     <p class="meta" id="intro-waves"></p>
-    <div class="row"><button id="btn-go" class="primary">Start building</button></div>
+    <div class="row"><button id="btn-go" class="primary">Defend</button></div>
   </div>
-  <div class="overlay" data-name="lost" hidden>
-    <h2>Washed out</h2>
-    <p id="lost-msg"></p>
+
+  <div class="overlay" data-name="result" hidden>
+    <h2 id="result-title"></h2>
+    <p id="result-msg"></p>
+    <p class="meta" id="share-status"></p>
     <div class="row">
-      <button id="btn-lost-menu" class="quiet">Levels</button>
-      <button id="btn-retry" class="primary">Try again</button>
-    </div>
-  </div>
-  <div class="overlay" data-name="won" hidden>
-    <h2>It held</h2>
-    <p id="won-msg"></p>
-    <div class="row">
-      <button id="btn-won-menu" class="quiet">Levels</button>
+      <button id="btn-share">Share ghost</button>
+      <button id="btn-retry">Try again</button>
       <button id="btn-next" class="primary">Next beach</button>
     </div>
+    <div class="row"><button id="btn-result-menu" class="quiet">Menu</button></div>
+  </div>
+
+  <div class="overlay" data-name="ghost" hidden>
+    <h2 id="ghost-title"></h2>
+    <p id="ghost-msg"></p>
+    <div class="row">
+      <button id="btn-ghost-cancel" class="quiet">Menu</button>
+      <button id="btn-ghost-race" class="primary">Race the ghost</button>
+    </div>
+  </div>
+
+  <div class="overlay" data-name="board" hidden>
+    <h2 id="board-title"></h2>
+    <div id="board-list" class="board"></div>
+    <div class="row">
+      <button id="btn-board-menu" class="quiet">Menu</button>
+      <button id="btn-board-play" class="primary">Play today's beach</button>
+    </div>
+  </div>
+
+  <div class="overlay" data-name="host" hidden>
+    <h2 id="host-title">Host</h2>
+    <p class="meta" id="host-status"></p>
+    <label class="field"><span>1. Your invite link</span><textarea id="host-link" rows="2" readonly></textarea></label>
+    <div class="row"><button id="btn-host-share" class="primary">Share invite</button></div>
+    <label class="field"><span>2. Your friend's reply</span><textarea id="host-reply" rows="3" placeholder="Paste the reply they send back"></textarea></label>
+    <div class="row">
+      <button id="btn-host-paste">Paste</button>
+      <button id="host-connect" class="primary">Connect</button>
+    </div>
+    <div class="row"><button id="btn-host-cancel" class="quiet">Cancel</button></div>
+  </div>
+
+  <div class="overlay" data-name="join" hidden>
+    <h2 id="join-title">Join</h2>
+    <p class="meta" id="join-status"></p>
+    <label class="field"><span>Your reply for the host</span><textarea id="join-reply" rows="3" readonly></textarea></label>
+    <div class="row"><button id="btn-join-share" class="primary">Send reply</button></div>
+    <div class="row"><button id="btn-join-cancel" class="quiet">Cancel</button></div>
   </div>
 </div>
 
 <script src="sim.js"></script>
 <script src="levels.js"></script>
+<script src="net.js"></script>
 <script src="game.js"></script>
