@@ -17,14 +17,13 @@ Structures are checked when each wave arrives and again after the last one settl
 
 ## With friends
 
-No server anywhere. Every mode works on the GitHub Pages site and in the standalone file.
+Daily and ghost links need no server at all. Room codes and matchmaking use the free public PeerJS signaling service only to introduce the two phones; after that they talk directly. The manual invite link works with no service.
 
 - **Daily Beach.** Everyone gets the same layout and the same waves for the day. Score is sand still standing, scaled by waves survived, minus sand moved. Your best is kept on your device; friends' results you open land on your board.
 - **Ghost Tide.** After any solo or daily run, Share ghost makes a link that carries your inputs (a few hundred bytes). A friend who opens it plays the same beach with the same waves while your moves appear as outlines, and sees your score to beat.
-- **Shared Beach (co-op).** Host picks a level and sends an invite link. The friend opens it and sends back a reply, which the host pastes in. From then on the two phones talk directly and both play on one beach with their own buckets.
-- **Opposing Tides (versus).** Same hand-off, on a mirrored beach with the sea in the middle and a castle on each shore. Either player can call the next wave early. A castle that is down when a wave arrives loses; if both hold to the end, the one with more sand wins.
+- **Shared Beach (co-op) and Opposing Tides (versus).** Pick the mode, then either Host (you get a four-digit room code your friend types under Join), Find anyone (matches you with whoever is waiting, or parks you first in line), or a manual invite link for when the room service is unreachable. Co-op plays any level together with separate buckets. Versus is a mirrored beach with the sea in the middle and a castle on each shore; either player can call the next wave early, a castle that is down when a wave arrives loses, and if both hold to the end the one with more sand wins.
 
-How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, no engine-specific math), so only inputs are ever shared. Live play is delay-based lockstep over a WebRTC data channel with manual signaling through the invite and reply codes, and peers compare sand checksums every two seconds to flag a desync.
+How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, no engine-specific math), so only inputs are ever shared. Live play is delay-based lockstep over a WebRTC data channel, and peers compare sand checksums every two seconds to flag a desync.
 
 ## Project layout
 

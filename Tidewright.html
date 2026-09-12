@@ -12,6 +12,7 @@
 <meta property="og:description" content="Defend your sandcastle against the rising tide.">
 <meta property="og:image" content="https://zin34.github.io/tidewright/icon-512.png">
 <link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <link rel="icon" type="image/png" sizes="64x64" href="icon-64.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
@@ -136,6 +137,19 @@
   #coop-level { width: auto; max-width: 140px; }
   .pastebox { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 4px; }
   .pastebox button { border: 0; border-radius: 10px; font: inherit; font-weight: 700; background: var(--panel-2); color: var(--ink); padding: 0 14px; cursor: pointer; }
+  .live { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--panel-2); }
+  .live .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--bg); border-radius: 10px; padding: 3px; }
+  .live .seg button { border: 0; border-radius: 8px; background: transparent; color: var(--ink-dim); font: inherit; padding: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; align-items: center; }
+  .live .seg button small { font-size: 11px; }
+  .live .seg button.active { background: var(--sand); color: #2b1d08; }
+  .live .seg button.active small { color: #5a4522; }
+  .live .wide { background: var(--panel); }
+  .live .pastebox input { width: 100%; box-sizing: border-box; border: 1px solid var(--panel); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 18px; letter-spacing: 0.25em; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+  .live .pastebox button { background: var(--sea); }
+  .live #coop-level { width: 100%; max-width: none; background: var(--bg); border-color: var(--panel); }
+  .tiny { font-size: 12px; padding: 6px; font-weight: 400; }
+  .bigcode { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 56px; font-weight: 800; letter-spacing: 0.18em; text-align: center; padding: 6px 0 0 0.18em; font-variant-numeric: tabular-nums; }
+  .center { text-align: center; }
   .board { display: grid; gap: 6px; margin: 10px 0 6px; }
   .brow { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
   .brow.mine { outline: 2px solid var(--sand); }
@@ -189,13 +203,25 @@
     <div class="friends">
       <button id="btn-daily" class="wide"><b>Daily Beach</b><small id="daily-sub"></small></button>
       <button id="btn-board" class="wide"><b>Today's board</b><small>Your best and friends' results you have opened</small></button>
-      <div class="pair">
-        <button id="btn-host-coop" class="wide"><b>Host co-op</b><small>Defend one castle together</small></button>
+      <div class="live">
+        <div class="seg">
+          <button id="mode-coop" class="active"><b>Co-op</b><small>one castle together</small></button>
+          <button id="mode-versus"><b>Versus</b><small>a castle each</small></button>
+        </div>
         <select id="coop-level" aria-label="Co-op level"></select>
+        <div class="pair">
+          <button id="btn-host-code" class="wide"><b>Host</b><small>Get a 4-digit room code</small></button>
+          <button id="btn-quick" class="wide"><b>Find anyone</b><small>Match with whoever is waiting</small></button>
+        </div>
+        <div class="pastebox">
+          <input id="code-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Room code">
+          <button id="btn-join-code">Join</button>
+        </div>
+        <p class="meta" id="live-status"></p>
+        <button id="btn-host-manual" class="quiet tiny">Manual invite link instead (works with no service)</button>
       </div>
-      <button id="btn-host-versus" class="wide"><b>Host versus</b><small>Opposing Tides, a castle each</small></button>
       <div class="pastebox">
-        <textarea id="paste-input" rows="2" placeholder="Paste an invite or a ghost link here"></textarea>
+        <textarea id="paste-input" rows="2" placeholder="Paste a ghost link or a manual invite here"></textarea>
         <button id="btn-paste">Open</button>
       </div>
       <p class="meta" id="paste-status"></p>
@@ -244,13 +270,16 @@
 
   <div class="overlay" data-name="host" hidden>
     <h2 id="host-title">Host</h2>
+    <div id="host-code-wrap"><div class="bigcode" id="host-code">····</div><p class="meta center">Room code. Your friend enters it under Join.</p></div>
     <p class="meta" id="host-status"></p>
-    <label class="field"><span>1. Your invite link</span><textarea id="host-link" rows="2" readonly></textarea></label>
-    <div class="row"><button id="btn-host-share" class="primary">Share invite</button></div>
-    <label class="field"><span>2. Your friend's reply</span><textarea id="host-reply" rows="3" placeholder="Paste the reply they send back"></textarea></label>
-    <div class="row">
-      <button id="btn-host-paste">Paste</button>
-      <button id="host-connect" class="primary">Connect</button>
+    <div id="host-manual" hidden>
+      <label class="field"><span>1. Your invite link</span><textarea id="host-link" rows="2" readonly></textarea></label>
+      <div class="row"><button id="btn-host-share" class="primary">Share invite</button></div>
+      <label class="field"><span>2. Your friend's reply</span><textarea id="host-reply" rows="3" placeholder="Paste the reply they send back"></textarea></label>
+      <div class="row">
+        <button id="btn-host-paste">Paste</button>
+        <button id="host-connect" class="primary">Connect</button>
+      </div>
     </div>
     <div class="row"><button id="btn-host-cancel" class="quiet">Cancel</button></div>
   </div>
@@ -258,8 +287,10 @@
   <div class="overlay" data-name="join" hidden>
     <h2 id="join-title">Join</h2>
     <p class="meta" id="join-status"></p>
-    <label class="field"><span>Your reply for the host</span><textarea id="join-reply" rows="3" readonly></textarea></label>
-    <div class="row"><button id="btn-join-share" class="primary">Send reply</button></div>
+    <div id="join-manual" hidden>
+      <label class="field"><span>Your reply for the host</span><textarea id="join-reply" rows="3" readonly></textarea></label>
+      <div class="row"><button id="btn-join-share" class="primary">Send reply</button></div>
+    </div>
     <div class="row"><button id="btn-join-cancel" class="quiet">Cancel</button></div>
   </div>
 </div>
@@ -903,7 +934,69 @@
     }
   }
 
-  const api = { pack, unpack, encodeActions, decodeActions, Peer, hasWebRTC: typeof RTCPeerConnection !== 'undefined' };
+  // ---------- rooms through the public PeerJS signaling service ----------
+  // Same data-channel transport, but the meeting point is a short room code
+  // registered with PeerJS's free cloud server (loaded from cdnjs when online).
+  function idFor(code) { return 'tw1-' + code; }
+  function roomsAvailable() { return api.hasWebRTC && typeof root.Peer === 'function'; }
+  class Link {
+    constructor(conn, peer) {
+      this.conn = conn; this.peer = peer;
+      this.open = !!conn.open;
+      this.onMessage = null; this.onOpen = null; this.onClose = null;
+      conn.on('open', () => { this.open = true; if (this.onOpen) this.onOpen(); });
+      conn.on('data', d => { if (!this.onMessage) return; try { this.onMessage(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { /* ignore junk */ } });
+      const closed = why => { if (this.open) { this.open = false; if (this.onClose) this.onClose(why); } };
+      conn.on('close', () => closed('closed'));
+      conn.on('error', () => closed('error'));
+      if (peer) peer.on('error', e => { if (this.open) closed(e && e.type || 'error'); });
+    }
+    send(obj) { if (this.conn.open) this.conn.send(obj); }
+    close() {
+      try { this.conn.close(); } catch (e) { /* ignore */ }
+      try { if (this.peer) this.peer.destroy(); } catch (e) { /* ignore */ }
+      this.open = false;
+    }
+  }
+  // Register a room. Resolves {code, close} once the service has accepted the id;
+  // onLink fires when a friend connects. A null code picks a random 4-digit one.
+  function hostRoom(code, onLink, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const useCode = code || String(1000 + Math.floor(Math.random() * 9000));
+      const peer = new root.Peer(idFor(useCode), { debug: 0 });
+      let settled = false;
+      const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
+      peer.on('open', () => { settled = true; resolve({ code: useCode, peer, close: () => { try { peer.destroy(); } catch (e) { /* ignore */ } } }); });
+      peer.on('connection', conn => { onLink(new Link(conn, null)); });
+      peer.on('error', err => fail(err));
+      setTimeout(() => fail(new Error('timeout')), timeoutMs || 8000);
+    });
+  }
+  async function hostRoomAny(onLink) {
+    let last = null;
+    for (let i = 0; i < 4; i++) {
+      try { return await hostRoom(null, onLink); }
+      catch (e) { last = e; if (!(e && e.type === 'unavailable-id')) throw e; }
+    }
+    throw last;
+  }
+  // Connect to a room by code. Resolves an open Link or rejects (no such room, no service).
+  function joinRoom(code, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const peer = new root.Peer({ debug: 0 });
+      let settled = false;
+      const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
+      peer.on('open', () => {
+        const conn = peer.connect(idFor(code), { reliable: true, serialization: 'json' });
+        const link = new Link(conn, peer);
+        conn.on('open', () => { if (settled) return; settled = true; resolve(link); });
+      });
+      peer.on('error', err => fail(err));
+      setTimeout(() => fail(new Error('timeout')), timeoutMs || 9000);
+    });
+  }
+
+  const api = { pack, unpack, encodeActions, decodeActions, Peer, hasWebRTC: typeof RTCPeerConnection !== 'undefined', roomsAvailable, hostRoom, hostRoomAny, joinRoom, idFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tidewright = Object.assign(root.Tidewright || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1327,6 +1420,7 @@
     $('daily-sub').textContent = best ? `${prettyKey(key)} · your best ${best.sc}` : `${prettyKey(key)} · not played yet`;
     $('name-input').value = playerName;
     $('net-note').hidden = TW.hasWebRTC;
+    $('live-status').textContent = TW.roomsAvailable() ? '' : (TW.hasWebRTC ? 'The room service is not reachable, so codes and matchmaking are off. Manual invite links still work.' : '');
     const sel = $('coop-level');
     if (!sel.options.length) LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${L.name}`; sel.appendChild(o); });
     sel.value = String(Math.min(7, unlocked));
@@ -1433,7 +1527,9 @@
 
   // ---------- networking ----------
   function stopNet() {
+    G.quickCancel = true;
     if (G.net) { try { G.net.close(); } catch (e) { /* ignore */ } G.net = null; }
+    if (G.room) { try { G.room.close(); } catch (e) { /* ignore */ } G.room = null; }
     if (G.netTimer) { clearInterval(G.netTimer); G.netTimer = null; }
   }
   function startNetLoop() {
@@ -1490,16 +1586,117 @@
     return m ? m[0] : null;
   }
 
-  async function hostGame(mode) {
-    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
-    stopNet();
+  // ----- shared pieces -----
+  function prepareHostMatch(mode) {
     G.me = 0;
     const level = parseInt($('coop-level').value, 10) || 0;
     const seed = newSeed();
     const L = mode === 'versus' ? VERSUS_LEVEL : LEVELS[level];
     G.levelIndex = mode === 'versus' ? -1 : level;
     beginMatch(L, seed, 2, mode);
-    $('host-title').textContent = mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`;
+    return { L, level, seed };
+  }
+  function hostTitle(mode, L) { return mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`; }
+  function attachLink(link) {
+    G.net = link;
+    link.onMessage = onNetMessage;
+    link.onClose = onNetClosed;
+  }
+  function sendHello(mode, info) { G.net.send({ k: 'hello', mode, level: info.level, seed: info.seed, n: playerName || 'Host' }); }
+  function lobbyCode(mode, k) { return `lobby-${mode}-${k}`; }
+
+  // ----- rooms: 4-digit codes and quick match through the public service -----
+  async function hostWithCode(mode) {
+    if (!TW.roomsAvailable()) { hostManual(mode); return; }
+    stopNet();
+    const info = prepareHostMatch(mode);
+    $('host-title').textContent = hostTitle(mode, info.L);
+    $('host-code-wrap').hidden = false; $('host-manual').hidden = true;
+    $('host-code').textContent = '····';
+    $('host-status').textContent = 'Opening a room…';
+    showOverlay('host');
+    try {
+      const room = await TW.hostRoomAny(link => {
+        if (G.net) return;   // one friend per room
+        attachLink(link);
+        $('host-status').textContent = 'Your friend is connecting…';
+        const hello = () => { $('host-status').textContent = 'Friend connected. Starting…'; sendHello(mode, info); };
+        if (link.open) hello(); else link.onOpen = hello;
+      });
+      G.room = room;
+      $('host-code').textContent = room.code;
+      $('host-status').textContent = 'Tell your friend this code. The game starts the moment they join.';
+    } catch (e) {
+      $('host-status').textContent = 'The room service could not be reached. Try again, or use a manual invite from the menu.';
+    }
+  }
+  async function joinWithCode(code, mode) {
+    if (!/^\d{4}$/.test(code)) { $('live-status').textContent = 'Room codes are four digits.'; return; }
+    if (!TW.roomsAvailable()) { $('live-status').textContent = 'Room codes need the online service, which is not reachable here. Use a manual invite link.'; return; }
+    stopNet();
+    G.quickCancel = false;
+    $('join-title').textContent = `Join · room ${code}`;
+    $('join-manual').hidden = true;
+    $('join-status').textContent = `Looking for room ${code}…`;
+    showOverlay('join');
+    try {
+      const link = await TW.joinRoom(code);
+      if (G.quickCancel) { link.close(); return; }
+      attachLink(link);
+      $('join-status').textContent = 'Connected. Waiting for the host to start…';
+    } catch (e) {
+      if (!G.quickCancel) $('join-status').textContent = `No room ${code} is open right now. Check the code with your host.`;
+    }
+  }
+  async function quickMatch(mode) {
+    if (!TW.roomsAvailable()) { $('live-status').textContent = 'Finding players needs the online service, which is not reachable here.'; return; }
+    stopNet();
+    G.quickCancel = false;
+    $('join-title').textContent = mode === 'versus' ? 'Find a rival' : 'Find a partner';
+    $('join-manual').hidden = true;
+    $('join-status').textContent = 'Looking for anyone waiting…';
+    showOverlay('join');
+    const slots = 6;
+    const order = []; for (let k = 0; k < slots; k++) order.push(k);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    for (const k of order) {
+      if (G.quickCancel) return;
+      try {
+        const link = await TW.joinRoom(lobbyCode(mode, k), 3500);
+        if (G.quickCancel) { link.close(); return; }
+        attachLink(link);
+        $('join-status').textContent = 'Found someone. Waiting for them to start…';
+        return;
+      } catch (e) { /* that slot is empty, try the next */ }
+    }
+    if (G.quickCancel) return;
+    // nobody waiting: become the one who waits
+    const info = prepareHostMatch(mode);
+    for (const k of order) {
+      if (G.quickCancel) return;
+      try {
+        const room = await TW.hostRoom(lobbyCode(mode, k), link => {
+          if (G.net) return;
+          attachLink(link);
+          const hello = () => { $('join-status').textContent = 'Someone arrived. Starting…'; sendHello(mode, info); };
+          if (link.open) hello(); else link.onOpen = hello;
+        }, 6000);
+        G.room = room;
+        $('join-status').textContent = 'Nobody is waiting right now, so you are first in line. The game starts when the next player looks for a match.';
+        return;
+      } catch (e) { /* slot taken or slow, try another */ }
+    }
+    $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.';
+  }
+
+  // ----- manual invite: no service, link and reply codes -----
+  async function hostManual(mode) {
+    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
+    stopNet();
+    const info = prepareHostMatch(mode);
+    const { level, seed } = info;
+    $('host-title').textContent = hostTitle(mode, info.L);
+    $('host-code-wrap').hidden = true; $('host-manual').hidden = false;
     $('host-status').textContent = 'Making your invite…';
     $('host-link').value = '';
     $('host-reply').value = '';
@@ -1538,6 +1735,7 @@
     if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
     stopNet();
     $('join-title').textContent = mode === 'v' ? 'Join · Opposing Tides' : 'Join · Shared Beach';
+    $('join-manual').hidden = false;
     $('join-status').textContent = 'Reading the invite…';
     $('join-reply').value = '';
     $('btn-join-share').disabled = true;
@@ -1686,8 +1884,20 @@
   $('btn-board').addEventListener('click', showBoard);
   $('btn-board-play').addEventListener('click', startDaily);
   $('btn-board-menu').addEventListener('click', goMenu);
-  $('btn-host-coop').addEventListener('click', () => hostGame('coop'));
-  $('btn-host-versus').addEventListener('click', () => hostGame('versus'));
+  G.liveMode = 'coop';
+  const paintLiveMode = () => {
+    $('mode-coop').classList.toggle('active', G.liveMode === 'coop');
+    $('mode-versus').classList.toggle('active', G.liveMode === 'versus');
+    $('coop-level').hidden = G.liveMode !== 'coop';
+  };
+  $('mode-coop').addEventListener('click', () => { G.liveMode = 'coop'; paintLiveMode(); });
+  $('mode-versus').addEventListener('click', () => { G.liveMode = 'versus'; paintLiveMode(); });
+  paintLiveMode();
+  $('btn-host-code').addEventListener('click', () => hostWithCode(G.liveMode));
+  $('btn-quick').addEventListener('click', () => quickMatch(G.liveMode));
+  $('btn-join-code').addEventListener('click', () => joinWithCode($('code-input').value.trim(), G.liveMode));
+  $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinWithCode($('code-input').value.trim(), G.liveMode); });
+  $('btn-host-manual').addEventListener('click', () => hostManual(G.liveMode));
   $('btn-paste').addEventListener('click', async () => {
     let text = $('paste-input').value;
     if (!text && navigator.clipboard && navigator.clipboard.readText) { try { text = await navigator.clipboard.readText(); } catch (e) { /* ignore */ } }

@@ -291,6 +291,7 @@
     $('daily-sub').textContent = best ? `${prettyKey(key)} · your best ${best.sc}` : `${prettyKey(key)} · not played yet`;
     $('name-input').value = playerName;
     $('net-note').hidden = TW.hasWebRTC;
+    $('live-status').textContent = TW.roomsAvailable() ? '' : (TW.hasWebRTC ? 'The room service is not reachable, so codes and matchmaking are off. Manual invite links still work.' : '');
     const sel = $('coop-level');
     if (!sel.options.length) LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}. ${L.name}`; sel.appendChild(o); });
     sel.value = String(Math.min(7, unlocked));
@@ -397,7 +398,9 @@
 
   // ---------- networking ----------
   function stopNet() {
+    G.quickCancel = true;
     if (G.net) { try { G.net.close(); } catch (e) { /* ignore */ } G.net = null; }
+    if (G.room) { try { G.room.close(); } catch (e) { /* ignore */ } G.room = null; }
     if (G.netTimer) { clearInterval(G.netTimer); G.netTimer = null; }
   }
   function startNetLoop() {
@@ -454,16 +457,117 @@
     return m ? m[0] : null;
   }
 
-  async function hostGame(mode) {
-    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
-    stopNet();
+  // ----- shared pieces -----
+  function prepareHostMatch(mode) {
     G.me = 0;
     const level = parseInt($('coop-level').value, 10) || 0;
     const seed = newSeed();
     const L = mode === 'versus' ? VERSUS_LEVEL : LEVELS[level];
     G.levelIndex = mode === 'versus' ? -1 : level;
     beginMatch(L, seed, 2, mode);
-    $('host-title').textContent = mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`;
+    return { L, level, seed };
+  }
+  function hostTitle(mode, L) { return mode === 'versus' ? 'Host · Opposing Tides' : `Host · ${L.name} together`; }
+  function attachLink(link) {
+    G.net = link;
+    link.onMessage = onNetMessage;
+    link.onClose = onNetClosed;
+  }
+  function sendHello(mode, info) { G.net.send({ k: 'hello', mode, level: info.level, seed: info.seed, n: playerName || 'Host' }); }
+  function lobbyCode(mode, k) { return `lobby-${mode}-${k}`; }
+
+  // ----- rooms: 4-digit codes and quick match through the public service -----
+  async function hostWithCode(mode) {
+    if (!TW.roomsAvailable()) { hostManual(mode); return; }
+    stopNet();
+    const info = prepareHostMatch(mode);
+    $('host-title').textContent = hostTitle(mode, info.L);
+    $('host-code-wrap').hidden = false; $('host-manual').hidden = true;
+    $('host-code').textContent = '····';
+    $('host-status').textContent = 'Opening a room…';
+    showOverlay('host');
+    try {
+      const room = await TW.hostRoomAny(link => {
+        if (G.net) return;   // one friend per room
+        attachLink(link);
+        $('host-status').textContent = 'Your friend is connecting…';
+        const hello = () => { $('host-status').textContent = 'Friend connected. Starting…'; sendHello(mode, info); };
+        if (link.open) hello(); else link.onOpen = hello;
+      });
+      G.room = room;
+      $('host-code').textContent = room.code;
+      $('host-status').textContent = 'Tell your friend this code. The game starts the moment they join.';
+    } catch (e) {
+      $('host-status').textContent = 'The room service could not be reached. Try again, or use a manual invite from the menu.';
+    }
+  }
+  async function joinWithCode(code, mode) {
+    if (!/^\d{4}$/.test(code)) { $('live-status').textContent = 'Room codes are four digits.'; return; }
+    if (!TW.roomsAvailable()) { $('live-status').textContent = 'Room codes need the online service, which is not reachable here. Use a manual invite link.'; return; }
+    stopNet();
+    G.quickCancel = false;
+    $('join-title').textContent = `Join · room ${code}`;
+    $('join-manual').hidden = true;
+    $('join-status').textContent = `Looking for room ${code}…`;
+    showOverlay('join');
+    try {
+      const link = await TW.joinRoom(code);
+      if (G.quickCancel) { link.close(); return; }
+      attachLink(link);
+      $('join-status').textContent = 'Connected. Waiting for the host to start…';
+    } catch (e) {
+      if (!G.quickCancel) $('join-status').textContent = `No room ${code} is open right now. Check the code with your host.`;
+    }
+  }
+  async function quickMatch(mode) {
+    if (!TW.roomsAvailable()) { $('live-status').textContent = 'Finding players needs the online service, which is not reachable here.'; return; }
+    stopNet();
+    G.quickCancel = false;
+    $('join-title').textContent = mode === 'versus' ? 'Find a rival' : 'Find a partner';
+    $('join-manual').hidden = true;
+    $('join-status').textContent = 'Looking for anyone waiting…';
+    showOverlay('join');
+    const slots = 6;
+    const order = []; for (let k = 0; k < slots; k++) order.push(k);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    for (const k of order) {
+      if (G.quickCancel) return;
+      try {
+        const link = await TW.joinRoom(lobbyCode(mode, k), 3500);
+        if (G.quickCancel) { link.close(); return; }
+        attachLink(link);
+        $('join-status').textContent = 'Found someone. Waiting for them to start…';
+        return;
+      } catch (e) { /* that slot is empty, try the next */ }
+    }
+    if (G.quickCancel) return;
+    // nobody waiting: become the one who waits
+    const info = prepareHostMatch(mode);
+    for (const k of order) {
+      if (G.quickCancel) return;
+      try {
+        const room = await TW.hostRoom(lobbyCode(mode, k), link => {
+          if (G.net) return;
+          attachLink(link);
+          const hello = () => { $('join-status').textContent = 'Someone arrived. Starting…'; sendHello(mode, info); };
+          if (link.open) hello(); else link.onOpen = hello;
+        }, 6000);
+        G.room = room;
+        $('join-status').textContent = 'Nobody is waiting right now, so you are first in line. The game starts when the next player looks for a match.';
+        return;
+      } catch (e) { /* slot taken or slow, try another */ }
+    }
+    $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.';
+  }
+
+  // ----- manual invite: no service, link and reply codes -----
+  async function hostManual(mode) {
+    if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
+    stopNet();
+    const info = prepareHostMatch(mode);
+    const { level, seed } = info;
+    $('host-title').textContent = hostTitle(mode, info.L);
+    $('host-code-wrap').hidden = true; $('host-manual').hidden = false;
     $('host-status').textContent = 'Making your invite…';
     $('host-link').value = '';
     $('host-reply').value = '';
@@ -502,6 +606,7 @@
     if (!TW.hasWebRTC) { alert('This browser cannot make direct connections.'); return; }
     stopNet();
     $('join-title').textContent = mode === 'v' ? 'Join · Opposing Tides' : 'Join · Shared Beach';
+    $('join-manual').hidden = false;
     $('join-status').textContent = 'Reading the invite…';
     $('join-reply').value = '';
     $('btn-join-share').disabled = true;
@@ -650,8 +755,20 @@
   $('btn-board').addEventListener('click', showBoard);
   $('btn-board-play').addEventListener('click', startDaily);
   $('btn-board-menu').addEventListener('click', goMenu);
-  $('btn-host-coop').addEventListener('click', () => hostGame('coop'));
-  $('btn-host-versus').addEventListener('click', () => hostGame('versus'));
+  G.liveMode = 'coop';
+  const paintLiveMode = () => {
+    $('mode-coop').classList.toggle('active', G.liveMode === 'coop');
+    $('mode-versus').classList.toggle('active', G.liveMode === 'versus');
+    $('coop-level').hidden = G.liveMode !== 'coop';
+  };
+  $('mode-coop').addEventListener('click', () => { G.liveMode = 'coop'; paintLiveMode(); });
+  $('mode-versus').addEventListener('click', () => { G.liveMode = 'versus'; paintLiveMode(); });
+  paintLiveMode();
+  $('btn-host-code').addEventListener('click', () => hostWithCode(G.liveMode));
+  $('btn-quick').addEventListener('click', () => quickMatch(G.liveMode));
+  $('btn-join-code').addEventListener('click', () => joinWithCode($('code-input').value.trim(), G.liveMode));
+  $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinWithCode($('code-input').value.trim(), G.liveMode); });
+  $('btn-host-manual').addEventListener('click', () => hostManual(G.liveMode));
   $('btn-paste').addEventListener('click', async () => {
     let text = $('paste-input').value;
     if (!text && navigator.clipboard && navigator.clipboard.readText) { try { text = await navigator.clipboard.readText(); } catch (e) { /* ignore */ } }

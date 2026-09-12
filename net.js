@@ -153,7 +153,69 @@
     }
   }
 
-  const api = { pack, unpack, encodeActions, decodeActions, Peer, hasWebRTC: typeof RTCPeerConnection !== 'undefined' };
+  // ---------- rooms through the public PeerJS signaling service ----------
+  // Same data-channel transport, but the meeting point is a short room code
+  // registered with PeerJS's free cloud server (loaded from cdnjs when online).
+  function idFor(code) { return 'tw1-' + code; }
+  function roomsAvailable() { return api.hasWebRTC && typeof root.Peer === 'function'; }
+  class Link {
+    constructor(conn, peer) {
+      this.conn = conn; this.peer = peer;
+      this.open = !!conn.open;
+      this.onMessage = null; this.onOpen = null; this.onClose = null;
+      conn.on('open', () => { this.open = true; if (this.onOpen) this.onOpen(); });
+      conn.on('data', d => { if (!this.onMessage) return; try { this.onMessage(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { /* ignore junk */ } });
+      const closed = why => { if (this.open) { this.open = false; if (this.onClose) this.onClose(why); } };
+      conn.on('close', () => closed('closed'));
+      conn.on('error', () => closed('error'));
+      if (peer) peer.on('error', e => { if (this.open) closed(e && e.type || 'error'); });
+    }
+    send(obj) { if (this.conn.open) this.conn.send(obj); }
+    close() {
+      try { this.conn.close(); } catch (e) { /* ignore */ }
+      try { if (this.peer) this.peer.destroy(); } catch (e) { /* ignore */ }
+      this.open = false;
+    }
+  }
+  // Register a room. Resolves {code, close} once the service has accepted the id;
+  // onLink fires when a friend connects. A null code picks a random 4-digit one.
+  function hostRoom(code, onLink, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const useCode = code || String(1000 + Math.floor(Math.random() * 9000));
+      const peer = new root.Peer(idFor(useCode), { debug: 0 });
+      let settled = false;
+      const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
+      peer.on('open', () => { settled = true; resolve({ code: useCode, peer, close: () => { try { peer.destroy(); } catch (e) { /* ignore */ } } }); });
+      peer.on('connection', conn => { onLink(new Link(conn, null)); });
+      peer.on('error', err => fail(err));
+      setTimeout(() => fail(new Error('timeout')), timeoutMs || 8000);
+    });
+  }
+  async function hostRoomAny(onLink) {
+    let last = null;
+    for (let i = 0; i < 4; i++) {
+      try { return await hostRoom(null, onLink); }
+      catch (e) { last = e; if (!(e && e.type === 'unavailable-id')) throw e; }
+    }
+    throw last;
+  }
+  // Connect to a room by code. Resolves an open Link or rejects (no such room, no service).
+  function joinRoom(code, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const peer = new root.Peer({ debug: 0 });
+      let settled = false;
+      const fail = err => { if (settled) return; settled = true; try { peer.destroy(); } catch (e) { /* ignore */ } reject(err); };
+      peer.on('open', () => {
+        const conn = peer.connect(idFor(code), { reliable: true, serialization: 'json' });
+        const link = new Link(conn, peer);
+        conn.on('open', () => { if (settled) return; settled = true; resolve(link); });
+      });
+      peer.on('error', err => fail(err));
+      setTimeout(() => fail(new Error('timeout')), timeoutMs || 9000);
+    });
+  }
+
+  const api = { pack, unpack, encodeActions, decodeActions, Peer, hasWebRTC: typeof RTCPeerConnection !== 'undefined', roomsAvailable, hostRoom, hostRoomAny, joinRoom, idFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tidewright = Object.assign(root.Tidewright || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);

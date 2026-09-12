@@ -4,6 +4,7 @@ const path = require('path');
 const root = __dirname;
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
+  if (/^https?:/.test(src)) return m;   // external libraries stay as links
   const code = fs.readFileSync(path.join(root, src), 'utf8').replace(/<\/script/gi, '<\\/script');
   return `<script>\n${code}\n</script>`;
 });
