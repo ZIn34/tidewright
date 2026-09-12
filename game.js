@@ -8,6 +8,7 @@
   'use strict';
   const TW = window.Tidewright;
   const { Sim, LEVELS, VERSUS_LEVEL, pack, unpack, encodeActions, decodeActions, Peer } = TW;
+  const SFX = TW.SFX || { play() {}, setWash() {}, setMuted() {}, isMuted() { return false; }, unlock() {} };
 
   const COLS = 20, ROWS = 28;
   const BUCKET_CAP = 10;
@@ -170,6 +171,7 @@
     if (!list) G.queue.set(t, list = []);
     list.push(a);
     if (G.net) G.outbox.push(a);
+    if (c === A_DIG) SFX.play('dig'); else if (c === A_PLACE) SFX.play('build');
   }
 
   // One fixed step of everything. Returns false when waiting on the network.
@@ -184,8 +186,17 @@
     const remote = G.net ? (G.remote.acts.get(t) || []) : [];
     if (G.net) G.remote.acts.delete(t);
     const all = (G.me === 0 ? local.concat(remote) : remote.concat(local));
-    all.forEach(a => { applyAction(m, a); m.log.push(a); });
+    const prevPhase = m.phase;
+    if (!m.standingPrev) m.standingPrev = m.structs.map(s => m.sim.standing(s).standing);
+    all.forEach(a => { if (a[1] === A_WAVE && G.net && a[4] !== G.me) SFX.play('horn'); applyAction(m, a); m.log.push(a); });
     matchTick(m);
+    if (prevPhase !== 'wave' && m.phase === 'wave') SFX.play('surge');
+    if (m.phase === 'build' && m.timer === 180) SFX.play('warn');
+    m.structs.forEach((s, i) => {
+      const up = m.sim.standing(s).standing;
+      if (up !== m.standingPrev[i]) { SFX.play(up ? 'repair' : 'breach'); m.standingPrev[i] = up; }
+    });
+    if (m.tick % 6 === 0) { let f = 0; const fl = m.sim.flow; for (let i = 0; i < fl.length; i += 2) f += fl[i]; SFX.setWash(f * 1.2); }
     if (G.ghost) {
       const g = G.ghost;
       while (g.ai < g.acts.length && g.acts[g.ai][0] <= g.tick) { applyAction(g, g.acts[g.ai]); g.ai++; }
@@ -288,6 +299,8 @@
   function onMatchOver() {
     G.resultShown = true;
     const m = G.match, r = m.result;
+    SFX.setWash(0);
+    SFX.play(r.type === 'won' || (r.type === 'win' && r.winner === G.me) ? 'won' : r.type === 'draw' ? 'warn' : 'lost');
     let title, msg = r.msg, canShare = false, canNext = false;
     if (G.mode === 'versus') {
       title = r.type === 'draw' ? 'A draw' : (r.winner === G.me ? 'Your castle stands' : 'Your castle fell');
@@ -612,6 +625,14 @@
   btnCall.addEventListener('click', () => { if (G.match && G.running && G.match.phase === 'build') scheduleLocal(A_WAVE, 0, 0); });
   $('btn-restart').addEventListener('click', () => retry());
   $('btn-menu').addEventListener('click', goMenu);
+  const btnMute = $('btn-mute');
+  const paintMute = () => { btnMute.textContent = SFX.isMuted() ? '\u{1F507}' : '\u{1F50A}'; btnMute.title = SFX.isMuted() ? 'Sound off' : 'Sound on'; };
+  btnMute.addEventListener('click', () => { SFX.unlock(); SFX.setMuted(!SFX.isMuted()); paintMute(); });
+  paintMute();
+  // browsers only start audio inside a user gesture
+  const unlockAudio = () => { SFX.unlock(); };
+  document.addEventListener('pointerdown', unlockAudio, { passive: true });
+  document.addEventListener('keydown', unlockAudio);
   $('btn-go').addEventListener('click', () => { showOverlay(null); G.running = true; updateHud(); });
   $('btn-retry').addEventListener('click', () => retry());
   $('btn-next').addEventListener('click', () => startSolo(Math.min(LEVELS.length - 1, G.levelIndex + 1)));
@@ -886,7 +907,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#0b1b2b';
     ctx.fillRect(0, 0, W, H);
-    if (!m) return;
+    if (!m || cell < 4) return;   // nothing sensible to draw in a collapsed viewport
     const sim = m.sim;
     const now = t * 0.001;
 
