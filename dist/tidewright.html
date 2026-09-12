@@ -1650,37 +1650,53 @@
     $('join-manual').hidden = true;
     $('join-status').textContent = 'Looking for anyone waiting…';
     showOverlay('join');
+    // Slots are tried in a fixed order so two players arriving together collide
+    // on the same slot: the second one fails to claim it and joins it instead.
     const slots = 6;
-    const order = []; for (let k = 0; k < slots; k++) order.push(k);
-    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    for (const k of order) {
+    const tryJoin = async (k, ms) => {
+      const link = await TW.joinRoom(lobbyCode(mode, k), ms);
+      if (G.quickCancel || G.net) { link.close(); return false; }
+      if (G.room) { G.room.close(); G.room = null; }
+      attachLink(link);
+      $('join-status').textContent = 'Found someone. Waiting for them to start…';
+      return true;
+    };
+    for (let k = 0; k < slots; k++) {
       if (G.quickCancel) return;
-      try {
-        const link = await TW.joinRoom(lobbyCode(mode, k), 3500);
-        if (G.quickCancel) { link.close(); return; }
-        attachLink(link);
-        $('join-status').textContent = 'Found someone. Waiting for them to start…';
-        return;
-      } catch (e) { /* that slot is empty, try the next */ }
+      try { if (await tryJoin(k, 3000)) return; } catch (e) { /* slot empty */ }
     }
     if (G.quickCancel) return;
-    // nobody waiting: become the one who waits
+    // nobody waiting: claim the lowest free slot and wait there
     const info = prepareHostMatch(mode);
-    for (const k of order) {
+    let mySlot = -1;
+    for (let k = 0; k < slots && mySlot < 0; k++) {
       if (G.quickCancel) return;
       try {
         const room = await TW.hostRoom(lobbyCode(mode, k), link => {
-          if (G.net) return;
+          if (G.net) { link.close(); return; }
           attachLink(link);
           const hello = () => { $('join-status').textContent = 'Someone arrived. Starting…'; sendHello(mode, info); };
           if (link.open) hello(); else link.onOpen = hello;
         }, 6000);
         G.room = room;
-        $('join-status').textContent = 'Nobody is waiting right now, so you are first in line. The game starts when the next player looks for a match.';
-        return;
-      } catch (e) { /* slot taken or slow, try another */ }
+        mySlot = k;
+      } catch (e) {
+        // someone claimed this slot a moment ago: they are the one we want
+        if (e && e.type === 'unavailable-id') { try { if (await tryJoin(k, 4000)) return; } catch (e2) { /* keep looking */ } }
+      }
     }
-    $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.';
+    if (mySlot < 0) { $('join-status').textContent = 'The room service could not be reached. Try again in a moment, or use a manual invite.'; return; }
+    $('join-status').textContent = 'Nobody is waiting right now, so you are first in line. The game starts when the next player looks for a match.';
+    // Keep checking the slots below ours while we wait, in case another player
+    // is waiting there too. Only the higher slot reaches down, so exactly one
+    // side of any pair initiates.
+    const myRoom = G.room;
+    while (!G.quickCancel && G.room === myRoom && !G.net) {
+      for (let j = 0; j < mySlot && !G.net && !G.quickCancel && G.room === myRoom; j++) {
+        try { if (await tryJoin(j, 2500)) return; } catch (e) { /* still empty */ }
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
   }
 
   // ----- manual invite: no service, link and reply codes -----
