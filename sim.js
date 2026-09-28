@@ -31,6 +31,7 @@
       this.w = new Float32Array(n);     // standing water depth
       this.g = new Float32Array(n);     // base ground (beach slope)
       this.rock = new Uint8Array(n);
+      this.packed = new Uint8Array(n);  // castle footprint: packed sand that dries slowly and holds its shape
       this.flow = new Float32Array(n);  // water flow magnitude during last step
       this.dw = new Float32Array(n);
       this.slope = opts.slope != null ? opts.slope : 1.3;
@@ -83,6 +84,10 @@
     inBounds(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; }
     isOcean(y) { return this.oceanRow[y] === 1; }
     surface(i) { return this.g[i] + this.h[i] + this.w[i]; }
+
+    // Castle sand is packed: it dries at a tenth of the rate and never slumps
+    // as if drier than 0.8, so only the sea (erosion) damages it.
+    setPacked(x, y) { this.packed[this.idx(x, y)] = 1; }
 
     setRock(x, y) {
       const i = this.idx(x, y);
@@ -163,7 +168,7 @@
             this.w[i] = Math.max(0, wv - 0.05 * dt);
           } else {
             this.w[i] = 0;
-            this.m[i] = Math.max(0, this.m[i] - this.dryRate * dt);
+            this.m[i] = Math.max(0, this.m[i] - this.dryRate * dt * (this.packed[i] ? 0.1 : 1));
           }
           if (wetRow) this.m[i] = Math.max(this.m[i], 0.85);
 
@@ -247,7 +252,8 @@
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           if (this.rock[i]) continue;
-          const limit = 1.0 + 3.2 * this.m[i];
+          const mi = this.packed[i] ? Math.max(this.m[i], 0.8) : this.m[i];
+          const limit = 1.0 + 3.2 * mi;
           const si = this.g[i] + this.h[i];
           for (let d = 0; d < 4; d++) {
             const nx = x + DIRS[d][0], ny = y + DIRS[d][1];

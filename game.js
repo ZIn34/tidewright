@@ -98,6 +98,7 @@
         if (sim.rock[i]) continue;
         sim.h[i] = Math.min(sim.maxH, s.req + 0.4);
         sim.m[i] = 1;
+        sim.setPacked(x, y);
       }
     });
     const buckets = [];
@@ -535,7 +536,7 @@
     if (statusEl) statusEl.textContent = full;
   }
   async function buildGhostLink(m) {
-    const meta = { v: 2, c: COLS, n: playerName || 'A friend', s: m.seed, sc: m.L.endless ? m.wavesSurvived : score(m), r: m.result ? m.result.type : 'x', a: encodeActions(m.log) };
+    const meta = { v: 3, c: COLS, n: playerName || 'A friend', s: m.seed, sc: m.L.endless ? m.wavesSurvived : score(m), r: m.result ? m.result.type : 'x', a: encodeActions(m.log) };
     if (m.L.daily) meta.d = m.L.daily; else if (m.L.endless) meta.e = 1; else meta.l = G.levelIndex;
     const u = {}; UPGRADES.forEach(x => { const l = upLevel(m.L.daily ? NO_UPGRADES : upgrades, x.id); if (l) u[x.id] = l; });
     if (Object.keys(u).length) meta.u = u;
@@ -545,7 +546,7 @@
     let meta;
     try { meta = JSON.parse(await unpack(code)); } catch (e) { alert('That link could not be read.'); return; }
     if (!meta || typeof meta.a !== 'string') { alert('That link could not be read.'); return; }
-    if (meta.v !== 2 || meta.c !== COLS) { alert('That ghost was recorded on an older beach layout and cannot be replayed here.'); return; }
+    if (meta.v !== 3 || meta.c !== COLS) { alert('That ghost was recorded on an older version of the beach and cannot be replayed here.'); return; }
     if (meta.d && meta.d === dailyKey()) recordDaily(meta.d, { n: meta.n || 'A friend', sc: meta.sc, code });
     if (meta.l != null && (meta.l < 0 || meta.l >= LEVELS.length)) { alert('That ghost is from a level this version does not have.'); return; }
     const L = meta.d ? dailyLevel(meta.d) : meta.e ? ENDLESS_LEVEL : LEVELS[meta.l];
