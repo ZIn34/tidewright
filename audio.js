@@ -12,7 +12,10 @@
   // Served next to the page on the site; the standalone file and other hosts
   // fetch it from the site so the single file stays small.
   const MUSIC_BASE = 0.4;
-  const MUSIC_SRC = /localhost|127\.0\.0\.1|github\.io/.test(location.hostname) ? 'theme.mp3' : 'https://zin34.github.io/tidewright/theme.mp3';
+  // Local first (site, dev server, desktop build with the file alongside); if
+  // that is missing, such as the standalone file opened on its own, stream it.
+  const MUSIC_REMOTE = 'https://zin34.github.io/tidewright/theme.mp3';
+  const MUSIC_SRC = (/localhost|127\.0\.0\.1|github\.io/.test(location.hostname) || location.protocol === 'file:') ? 'theme.mp3' : MUSIC_REMOTE;
   let music = null, duckUntil = 0, duckTimer = null;
   function ensureMusic() {
     if (music) return music;
@@ -21,6 +24,9 @@
     music.preload = 'auto';
     music.volume = MUSIC_BASE;
     music.muted = muted;
+    music.addEventListener('error', () => {
+      if (music.src !== MUSIC_REMOTE && !music.src.endsWith('/theme.mp3?r')) { music.src = MUSIC_REMOTE; if (musicOn) music.play().catch(() => {}); }
+    }, { once: true });
     return music;
   }
   function startMusic() {

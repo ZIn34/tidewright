@@ -1,0 +1,43 @@
+{
+  "name": "tidewright",
+  "productName": "Tidewright",
+  "version": "1.0.0",
+  "description": "Defend your sandcastle against the rising tide.",
+  "author": "ZIn34",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win --dir",
+    "portable": "electron-builder --win portable --prepackaged dist/win-unpacked"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.zin34.tidewright",
+    "productName": "Tidewright",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "app/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "app/icon-512.png",
+      "artifactName": "Tidewright-Windows.exe"
+    },
+    "portable": {
+      "artifactName": "Tidewright-Windows.exe"
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

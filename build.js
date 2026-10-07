@@ -25,3 +25,12 @@ const standalone = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="ut
 const out2 = path.join(root, 'Tidewright.html');
 fs.writeFileSync(out2, standalone);
 console.log(`wrote ${out2} (${(standalone.length / 1024).toFixed(1)} KB)`);
+
+// Desktop app payload: the standalone page plus the music and icon beside it.
+const appDir = path.join(root, 'desktop', 'app');
+fs.mkdirSync(appDir, { recursive: true });
+fs.writeFileSync(path.join(appDir, 'index.html'), standalone);
+['theme.mp3', 'icon-512.png', 'icon-192.png', 'icon-64.png'].forEach(f => {
+  if (fs.existsSync(path.join(root, f))) fs.copyFileSync(path.join(root, f), path.join(appDir, f));
+});
+console.log(`staged desktop/app for the Windows build`);

@@ -51,6 +51,10 @@ How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, n
 | `devserver.js` | Dev-only static server that also accepts frame uploads for headless render checks. |
 | `theme.mp3` | Theme music loop, fetched from the site by the standalone file. |
 
+## Windows build
+
+`desktop/` wraps the game in Electron for itch.io. From that folder, `npm install`, then `npm run pack` (unpacked app in `desktop/dist/win-unpacked`) and `npm run portable` (single `Tidewright-Windows.exe`). The two steps are separate because the Windows signing helper fails to extract without admin rights; the build still completes. `node build.js` at the repo root stages the page, music and icon into `desktop/app` first. Upload the zip of `win-unpacked` to itch as the Windows download, or the portable exe.
+
 ## Working on it
 
 ```bash
