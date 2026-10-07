@@ -53,7 +53,7 @@ How it works: the simulation is deterministic (fixed 60 Hz tick, integer PRNG, n
 
 ## Windows build
 
-`desktop/` wraps the game in Electron for itch.io. From that folder, `npm install`, then `npm run pack` (unpacked app in `desktop/dist/win-unpacked`) and `npm run portable` (single `Tidewright-Windows.exe`). The two steps are separate because the Windows signing helper fails to extract without admin rights; the build still completes. `node build.js` at the repo root stages the page, music and icon into `desktop/app` first. Upload the zip of `win-unpacked` to itch as the Windows download, or the portable exe.
+`desktop/` wraps the game in Electron for itch.io. From that folder, `npm install`, then `npm run pack` (unpacked app in `desktop/dist/win-unpacked`) and `npm run portable` (single `Tidewright-Windows.exe`). The two steps are separate because the Windows signing helper fails to extract without admin rights; the build still completes but skips the icon, so stamp `dist/win-unpacked/Tidewright.exe` with `rcedit-x64.exe --set-icon icon.ico` (from the electron-builder cache) before the portable step. Never run rcedit on the portable exe itself: it is a self-extracting archive and the tool strips the payload. `node build.js` at the repo root stages the page, music and icon into `desktop/app` first. Upload the zip of `win-unpacked` to itch as the Windows download, or the portable exe.
 
 ## Working on it
 

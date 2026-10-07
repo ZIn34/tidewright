@@ -30,7 +30,7 @@
       "target": [
         "portable"
       ],
-      "icon": "app/icon-512.png",
+      "icon": "icon.ico",
       "artifactName": "Tidewright-Windows.exe"
     },
     "portable": {
